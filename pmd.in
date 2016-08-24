@@ -1,0 +1,17 @@
+0
+1 1 1
+4 4 4 
+0.9
+1.2
+0.003
+50000
+1000
+--------------------------------------------
+mdmode: 0=initial run, 1=normal run, 4=T control, 5=MSD 
+vproc[0],vproc[1],vproc[2]
+InitUcell[0],InitUcell[1],InitUcell[2]
+Density
+InitTemp
+DeltaT
+tepLimit
+tepAvg
