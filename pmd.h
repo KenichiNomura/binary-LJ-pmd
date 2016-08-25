@@ -103,7 +103,7 @@ double DeltaTH;    /* Half the time step */
 
 // variables for multicomponet system
 #define NC 2
-double Ac[NC]={1.00, 1.0}, Sg[NC]={1.0, 1.0}; 
+double Ac[NC]={0.8, 1.0}, Sg[NC]={1.0, 1.0}; 
 //#define NC 1
 //double Ac[NC]={1.0}, Sg[NC]={1.0}; 
 

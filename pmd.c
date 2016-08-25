@@ -8,7 +8,6 @@ systems using the Message Passing Interface (MPI) standard.
 int main(int argc, char **argv) {
 /*--------------------------------------------------------------------*/
   double cpu1;
-  int a;
 
   MPI_Init(&argc,&argv); /* Initialize the MPI environment */
   MPI_Comm_rank(MPI_COMM_WORLD, &sid);  /* My processor ID */
@@ -45,7 +44,6 @@ void init_params() {
 Initializes parameters.
 ----------------------------------------------------------------------*/
   int a;
-  double rr,ri2,ri6,r1;
   FILE *fp;
 
   /* Read control parameters */
@@ -146,7 +144,6 @@ rv are initialized with a random velocity corresponding to Temperature.
   double c[3],gap[3],e[3],vSum[3],gvSum[3],vMag;
   int j,a,nex,nX,nY,nZ;
   double seed;
-  char a11[11];
   FILE *fp = NULL; 
   long int *nary; 
   int *tary; 
@@ -193,13 +190,13 @@ rv are initialized with a random velocity corresponding to Temperature.
      n=nary[sid];
      nex=0;
      MPI_Exscan(&n,&nex,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
-/*
+
      printf("sid=%d, n=%d, nex=%d\n", sid, n, nex);
      if(sid==nprocs-1) {
-        for(a=0; a<nprocs; a++) printf("n[%d]=%d  ",a,nary[a]);
+        for(a=0; a<nprocs; a++) printf("n[%d]=%ld  ",a,nary[a]);
         printf("\n");
      }
-*/
+
      // resident atom information is stored between nex and nex+n
      for(j=0, a=nex; a<nex+n; a++, j++) {
         atype[j]=tary[a];
@@ -308,7 +305,7 @@ the residents.
 ----------------------------------------------------------------------*/
   int i,j,a,lc2[3],lcyz2,lcxyz2,mc[3],c,mc1[3],c1;
   int bintra;
-  double dr[3],rr,ri2,ri6,r1,rrCut,fcVal,f,vVal,lpe,dr2,dr2i;
+  double dr[3],rr,rrCut,lpe,dr2,dr2i;
   int idiv,ia,ib;
   double rdiv,vr,fr;
 
@@ -565,7 +562,7 @@ void atom_copy() {
 Exchanges boundary-atom coordinates among neighbor nodes:  Makes 
 boundary-atom list, LSB, then sends & receives boundary atoms.
 ----------------------------------------------------------------------*/
-  int kd,kdd,i,ku,inode,nsd,nrc,a;
+  int kd,kdd,i,ku,nsd,nrc,a;
   int inode_s,inode_r;
   int nbnew = 0; /* # of "received" boundary atoms */
   double com1;
@@ -678,7 +675,7 @@ mvque[6][NBMAX]: mvque[ku][0] is the # of to-be-moved atoms to neighbor
 ----------------------------------------------------------------------*/
   int mvque[6][NBMAX];
   int newim = 0; /* # of new immigrants */
-  int ku,kd,i,kdd,kul,kuh,inode,ipt,a,nsd,nrc;
+  int ku,kd,i,kdd,kul,kuh,ipt,a,nsd,nrc;
   int inode_s,inode_r;
   double com1;
 
@@ -809,7 +806,7 @@ void make_tables(){
  * the last point in the two tables to make sure r=RCUT being treated propery.
  * ----------------------------------------------------------------------*/
 int i,ia,ib;
-double dr, ri, ri2, ri6, ri12;
+double ri, ri2, ri6, ri12;
 double currentr, currentr2, voffset, foffset;
 double dr2,rcab;
 double aa[NC][NC],ss[NC][NC];

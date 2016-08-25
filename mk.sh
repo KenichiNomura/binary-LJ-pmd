@@ -1,3 +1,3 @@
 #!/bin/sh
 
-mpicc -Wall pmd.c -o pmd
+mpicc -O3 -Wall pmd.c -o pmd
