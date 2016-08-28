@@ -863,19 +863,16 @@ void gather_coordinates() {
 
     // allocate and clean up arrays
     sbuf = (double *)malloc(sizeof(double)*NMAX*3);
-    rbuf = (double *)malloc(sizeof(double)*NMAX*3);
     for(i=0; i<NMAX; i++)
         for(a=0; a<3; a++)
-        {
             sbuf[i*3+a]=0.0;
-            rbuf[i*3+a]=0.0;
-        }
 
     // initialize dbuf with global coord.
     for(i=0; i<n; i++)
         for(a=0; a<3; a++)
             sbuf[(i+nex)*3+a]=r[i][a]+ol[a];
 
+    rbuf = (double *)malloc(sizeof(double)*NMAX*3);
     MPI_Allreduce(sbuf,rbuf,NMAX*3,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
 
     // rbuf has all atom global coordinates by now.
@@ -909,8 +906,8 @@ void compute_gr(int output) {
             for(rr=0.0, a=0; a<3; a++)
             {
                 rdif = rg[j][a]-rg[i][a];
-                if(rdif>=0.5*al[a]) rdif-=al[a];
-                if(rdif<-0.5*al[a]) rdif+=al[a];
+                if(rdif>=0.5*gl[a]) rdif-=gl[a];
+                if(rdif<-0.5*gl[a]) rdif+=gl[a];
                 rr += rdif*rdif;
             }
             rr = sqrt(rr);
@@ -947,7 +944,6 @@ void compute_gr(int output) {
             }
         */
     }
-
 
     free(hist);
     free(rbuf);
@@ -1013,7 +1009,7 @@ void write_config(int nstep) {
 
     // write atom type, position, velocity & close file
     for(a=0; a<n; a++) {
-        fprintf(fp,"%d %lf %lf %lf %lf %lf %lf\n",
+        fprintf(fp,"Ar%d %lf %lf %lf %lf %lf %lf\n",
                 atype[a], r[a][0]+rs[0],r[a][1]+rs[1],r[a][2]+rs[2],
                 rv[a][0],rv[a][1],rv[a][2]);
     }
