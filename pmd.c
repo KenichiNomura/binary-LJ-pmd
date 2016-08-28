@@ -439,7 +439,7 @@ void eval_props() {
     /*----------------------------------------------------------------------
     Evaluates physical properties: kinetic, potential & total energies.
     ----------------------------------------------------------------------*/
-    double vv,lke, rr,rr1,msd=0.0, v0nrm,v1nrm,vacl,vac=0.0;
+    double vv,lke,msd,vac;
     int i,a;
     double fs;
 
@@ -460,44 +460,15 @@ void eval_props() {
     totEnergy = kinEnergy + potEnergy;
     temperature = kinEnergy*2.0/3.0;
 
-    /* Compute mean square displacement and velocity autocorrelation*/
-    if(mdmode==5) {
-
-        rr=0.0;
-        for (i=0; i<n; i++) {
-            for (a=0; a<3; a++) {
-                rr1 = r[i][a]-r0[i][a];
-                rr += rr1*rr1;
-            }
-        }
-
-        MPI_Allreduce(&rr,&msd,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
-        msd /= nglob;
-
-        vacl=0.0;
-        for (i=0; i<n; i++) {
-            vv=0.0;
-            v0nrm=0.0;
-            v1nrm=0.0;
-            for (a=0; a<3; a++) {
-                v0nrm += v0[i][a]*v0[i][a];
-                v1nrm += rv[i][a]*rv[i][a];
-                vv += v0[i][a]*rv[i][a];
-            }
-            vacl += vv/(sqrt(v0nrm)*sqrt(v1nrm));
-        }
-
-        MPI_Allreduce(&vacl,&vac,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
-        vac /= nglob;
-
-    }
-
     /* Temperature control */
     if(mdmode==4) {
         fs = sqrt(InitTemp/temperature);
         for (lke=0.0, i=0; i<n; i++)
             for (vv=0.0, a=0; a<3; a++) rv[i][a]=fs*rv[i][a];
     }
+
+    msd=compute_msd();
+    vac=compute_vac();
 
     /* Print the computed properties */
     if (sid == 0) printf("%9.2f %9.6f %9.6f %9.6f  %9.6lf %9.6lf\n",
@@ -947,6 +918,57 @@ void compute_gr(int output) {
 
     free(hist);
     free(rbuf);
+}
+
+/*---------------------------------------------------------------------*/
+double compute_vac()
+/*---------------------------------------------------------------------
+ * Compute velocity auto-correlation
+----------------------------------------------------------------------*/
+{
+    int i, a;
+    double  vv,v0nrm,v1nrm,vacl,vac=0.0;
+
+    vacl=0.0;
+    for (i=0; i<n; i++) {
+        vv=0.0;
+        v0nrm=0.0;
+        v1nrm=0.0;
+        for (a=0; a<3; a++) {
+            v0nrm += v0[i][a]*v0[i][a];
+            v1nrm += rv[i][a]*rv[i][a];
+            vv += v0[i][a]*rv[i][a];
+        }
+        vacl += vv/(sqrt(v0nrm)*sqrt(v1nrm));
+    }
+
+    MPI_Allreduce(&vacl,&vac,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+    vac /= nglob;
+
+    return vac;
+}
+
+/*---------------------------------------------------------------------*/
+double compute_msd()
+/*---------------------------------------------------------------------
+ * Compute mean square displacement
+----------------------------------------------------------------------*/
+{
+    int i, a;
+    double rr,rr1,msd=0.0;
+
+    rr=0.0;
+    for (i=0; i<n; i++) {
+        for (a=0; a<3; a++) {
+            rr1 = r[i][a]-r0[i][a];
+            rr += rr1*rr1;
+        }
+    }
+
+    MPI_Allreduce(&rr,&msd,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+    msd /= nglob;
+
+    return msd;
 }
 
 

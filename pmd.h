@@ -165,5 +165,7 @@ double sqrt_nr(double y);
 void write_config(int n);
 void gather_coordinates(); 
 void compute_gr();
+double compute_vac();
+double compute_msd();
 /*--------------------------------------------------------------------*/
 
