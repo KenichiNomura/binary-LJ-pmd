@@ -1,3 +1,3 @@
 #!/bin/sh
 
-rm -fv gr pmd pmd.d
+rm -rfv gr pmd pmd.d *.xyz pmd.dSYM

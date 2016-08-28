@@ -3,6 +3,7 @@ pmd.h is an include file for a parallel MD program, pmd.c.
 ----------------------------------------------------------------------*/
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <math.h>
 #include "mpi.h"
 
@@ -103,12 +104,16 @@ double DeltaTH;    /* Half the time step */
 
 // variables for multicomponet system
 #define NC 2
-double Ac[NC]={0.8, 1.0}, Sg[NC]={1.0, 1.0}; 
+double Ac[NC]={1.0, 1.0}, Sg[NC]={1.0, 1.0}; 
 //#define NC 1
 //double Ac[NC]={1.0}, Sg[NC]={1.0}; 
 
 // potential & force table
 double vtable[NC][NC][NTMAX+1], ftable[NC][NC][NTMAX+1];
+
+// gr
+uint32_t *hist, nbin;
+double grcut = 10, grdr = 0.2;
 
 /* Input data-----------------------------------------------------------
 
@@ -159,5 +164,6 @@ int bmv(double* ri, int ku);
 double sqrt_nr(double y);
 void write_config(int n);
 void gather_coordinates(); 
+void compute_gr();
 /*--------------------------------------------------------------------*/
 

@@ -20,25 +20,23 @@ int main(int argc, char **argv) {
   atom_copy();
   compute_accel(); /* Computes initial accelerations */ 
 
-  gather_coordinates();
-
-  MPI_Finalize();
-  exit(0); 
-
   cpu1 = MPI_Wtime();
   for (stepCount=currCount; stepCount<=currCount+StepLimit; stepCount++) {
     single_step(); 
     if (stepCount%StepAvg == 0) {
        eval_props();
        write_config(stepCount);
+
+       gather_coordinates();
+       compute_gr(0);
     }
-    //if (stepCount%StepAvg == 0) thermal_slice();
   }
   cpu = MPI_Wtime() - cpu1;
   if (sid == 0) printf("CPU & COMT = %le %le\n",cpu,comt);
 
   /* save last config */
   write_config(-1);
+  compute_gr(-1);
 
   MPI_Finalize(); /* Clean up the MPI environment */
 }
@@ -196,7 +194,7 @@ rv are initialized with a random velocity corresponding to Temperature.
      nex=0;
      MPI_Exscan(&n,&nex,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
 
-     printf("sid=%d, n=%d, nex=%d\n", sid, n, nex);
+     //printf("sid=%d, n=%d, nex=%d\n", sid, n, nex);
      if(sid==nprocs-1) {
         for(a=0; a<nprocs; a++) printf("n[%d]=%ld  ",a,nary[a]);
         printf("\n");
@@ -850,22 +848,97 @@ void gather_coordinates() {
 /*---------------------------------------------------------------------
 ----------------------------------------------------------------------*/
   int i,a,nex;
+  double *sbuf,*rbuf;
+
   nex=0;
   MPI_Exscan(&n,&nex,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
-  printf("sid=%d n=%d nex=%d\n",sid,n,nex);
+  //printf("sid=%d n=%d nex=%d\n",sid,n,nex);
 
-  // clean up the global coordinate
-  for(i=0; i<NEMAX; i++)
+  // allocate and clean up arrays
+  sbuf = (double *)malloc(sizeof(double)*NMAX*3);
+  rbuf = (double *)malloc(sizeof(double)*NMAX*3);
+  for(i=0; i<NMAX; i++)
+    for(a=0; a<3; a++) 
+      {
+        sbuf[i*3+a]=0.0;
+        rbuf[i*3+a]=0.0; 
+      }
+
+  // initialize dbuf with global coord.
+  for(i=0; i<n; i++)
     for(a=0; a<3; a++)
-      rg[i+nex][a]=0.0; 
+      sbuf[(i+nex)*3+a]=r[i][a]+ol[a];
 
-  for(i=0; i<n; i++){
-    for(a=0; a<3; a++) {
-      rg[i+nex][a]=r[i][a];
+  MPI_Allreduce(sbuf,rbuf,NMAX*3,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+
+  // rbuf has all atom global coordinates by now. 
+  for(i=0; i<nglob; i++)
+    for(a=0; a<3; a++)
+       rg[i][a]=rbuf[i*3+a];
+
+  free(sbuf);
+  free(rbuf);
+}
+/*---------------------------------------------------------------------*/
+void compute_gr(int output) {
+/*---------------------------------------------------------------------
+----------------------------------------------------------------------*/
+  uint32_t i,j,a;
+  uint32_t idx,nbin,*hist;
+  double dr,rdif,rr,denom,rcut=5,pi=3.14159265359; 
+
+  dr = 0.2;
+  nbin = rcut/dr;
+  //printf("sid = %d, dr = %lf, nbin=%d\n", sid, dr, nbin);
+
+  hist = (uint32_t *)malloc(sizeof(uint32_t)*nbin);
+  for(i=0; i<nbin; i++) hist[i]=0; 
+
+  for(i=0; i<nglob; i++) {
+    for(j=0; j<nglob; j++) {
+
+      if(i==j) continue; 
+
+      for(rr=0.0, a=0; a<3; a++)
+      {
+         rdif = rg[j][a]-rg[i][a];
+         if(rdif>=0.5*al[a]) rdif-=al[a];
+         if(rdif<-0.5*al[a]) rdif+=al[a];
+         rr += rdif*rdif;
+      } 
+      rr = sqrt(rr);
+      if(rr<rcut)
+      { 
+        idx = rr/dr; 
+        hist[idx]++;
+      }
     }
   }
 
+  if(sid==0 && output==-1) 
+  {
+    //printf("%d compute_gr\n",sid);
+    for(int i=1; i<nbin; i++)
+    {
+       rr = i*dr; 
+       denom = 4.0*pi*(rr*rr*dr*Density)*nglob;
+       printf("%lf  %lf %lf %d\n", rr, (double)hist[i]/denom, denom, hist[i]);
+    }
+
+/*
+    printf("%d\n",nglob);
+    printf("%f %f %f\n",al[0],al[1],al[2]);
+    for(i=0; i<nglob; i++)
+    {
+      printf("%d %f %f %f\n",12,rg[i][0],rg[i][1],rg[i][2]);
+    }
+*/
+  }
+
+
+  free(hist);
 }
+
 
 /*---------------------------------------------------------------------*/
 void write_config(int nstep) {
@@ -875,8 +948,8 @@ void write_config(int nstep) {
  * MPIrank==0 to nprocs-1. whoever holds the token can access file.
 ----------------------------------------------------------------------*/
   FILE *fp;
-  char fname[15];
-  int i,a;
+  char fname[19];
+  uint32_t i,a;
   long int *iary, *nary; 
   double rs[3];
 
@@ -901,7 +974,7 @@ void write_config(int nstep) {
      for(a=0; a<3; a++) rs[a]=0; 
   } else { 
      // save check point data for visualization & analysis
-     sprintf(fname,"data/pmd%06d",nstep/1000);
+     sprintf(fname,"data/pmd%06d.xyz",nstep/1000);
      if(sid==0) { fp = fopen(fname,"w"); }
      else { fp = fopen(fname,"a"); }
      // set shift vector domain dims, save global atom position 
