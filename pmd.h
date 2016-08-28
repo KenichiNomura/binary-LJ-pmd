@@ -18,7 +18,7 @@ RCUT = Potential cut-off length
 MOVED_OUT: Signifies a moved-out resident atom in function atom_move.
 EMPTY: Signifies the end of a linked list.
 ----------------------------------------------------------------------*/
-#define NMAX 10000
+#define NMAX 20000
 #define NEMAX 20000
 #define NDBUF 30000
 #define NBMAX 10000
@@ -86,7 +86,7 @@ double al[3],gl[3],ol[3];
 int mdmode=0; 
 int n,nb,nglob;
 double r[NEMAX][3],rv[NEMAX][3],ra[NMAX][3];
-double r0[NEMAX][3];
+double r0[NEMAX][3], v0[NEMAX][3], rg[NMAX][3];
 int atype[NEMAX];
 double dbuf[NDBUF],dbufr[NDBUF];
 int sid,nprocs,vid[3],nn[6],myparity[3];
@@ -158,5 +158,6 @@ int bbd(double* ri, int ku);
 int bmv(double* ri, int ku);
 double sqrt_nr(double y);
 void write_config(int n);
+void gather_coordinates(); 
 /*--------------------------------------------------------------------*/
 

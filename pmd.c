@@ -20,6 +20,11 @@ int main(int argc, char **argv) {
   atom_copy();
   compute_accel(); /* Computes initial accelerations */ 
 
+  gather_coordinates();
+
+  MPI_Finalize();
+  exit(0); 
+
   cpu1 = MPI_Wtime();
   for (stepCount=currCount; stepCount<=currCount+StepLimit; stepCount++) {
     single_step(); 
@@ -267,7 +272,11 @@ rv are initialized with a random velocity corresponding to Temperature.
 
   /* Initialize the initial coordinate */
   for (j=0; j<n; j++)
-    for(a=0; a<3; a++) r0[j][a] = r[j][a];
+    for(a=0; a<3; a++) 
+       {
+          r0[j][a] = r[j][a];
+          v0[j][a] = rv[j][a];
+       }
 }
 
 /*--------------------------------------------------------------------*/
@@ -423,66 +432,11 @@ the residents.
 }
 
 /*--------------------------------------------------------------------*/
-void thermal_slice() {
-/*----------------------------------------------------------------------
-Evaluates physical properties: kinetic, potential & total energies.
-----------------------------------------------------------------------*/
-  double vv1, vv2, ke1, ke2, rr[3], al14[3],al34[3];
-  double tslice=10;
-  int i,a,n1,n2;
-
-  for (a=0; a<3; a++) {
-     al14[a]=gl[a]*0.25;
-     al34[a]=gl[a]*0.75;
-  }
-
-  n1=0; vv1=0.0; 
-  n2=0; vv2=0.0; 
-  for (i=0; i<n; i++) {
-    // get global coordinates
-    for (a=0; a<3; a++) rr[a]=r[i][a]+ol[a];
-
-    if( fabs(rr[0]-gl[0]*0.25) < 0.5*tslice) {
-          n1++;
-          for (a=0; a<3; a++) vv1 += rv[i][a]*rv[i][a];
-    }
-    if( fabs(rr[0]-gl[0]*0.75) < 0.5*tslice) {
-          n2++;
-          for (a=0; a<3; a++) vv2 += rv[i][a]*rv[i][a];
-    }
-
-  }
- 
-// Get kinetic energy of each slice
-  vv1*=0.5;
-  vv2*=0.5;
-  MPI_Allreduce(&vv1,&ke1,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
-  MPI_Allreduce(&vv2,&ke2,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
-
-// Get number of atoms in each slice
-  a=n1; 
-  MPI_Allreduce(&a,&n1,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
-  a=n2; 
-  MPI_Allreduce(&a,&n2,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
-
-// Get energy per atom
-  ke1 /= n1; 
-  ke2 /= n2; 
-
-  /* Print the computed properties */
-  if (sid == 0) {
-      printf("left slice: al14[0] = %9.2f ke = %9.2f natoms n1 = %d\n",al14[0], ke1,n1);
-      printf("left slice: al34[0] = %9.2f ke = %9.2f natoms n2 = %d\n",al34[0], ke2,n2);
-  }
-}
-
-
-/*--------------------------------------------------------------------*/
 void eval_props() {
 /*----------------------------------------------------------------------
 Evaluates physical properties: kinetic, potential & total energies.
 ----------------------------------------------------------------------*/
-  double vv,lke, rr,rr1,msd=0.0;
+  double vv,lke, rr,rr1,msd=0.0, v0nrm,v1nrm,vacl,vac=0.0;
   int i,a;
   double fs;
 
@@ -503,8 +457,9 @@ Evaluates physical properties: kinetic, potential & total energies.
   totEnergy = kinEnergy + potEnergy;
   temperature = kinEnergy*2.0/3.0;
 
-  /* Compute mean square displacement */
+  /* Compute mean square displacement and velocity autocorrelation*/
   if(mdmode==5) {
+
     rr=0.0; 
     for (i=0; i<n; i++) {
       for (a=0; a<3; a++) { 
@@ -512,8 +467,26 @@ Evaluates physical properties: kinetic, potential & total energies.
          rr += rr1*rr1; 
       }
     }
+
     MPI_Allreduce(&rr,&msd,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
     msd /= nglob;
+
+    vacl=0.0;
+    for (i=0; i<n; i++) {
+      vv=0.0;
+      v0nrm=0.0;
+      v1nrm=0.0; 
+      for (a=0; a<3; a++) { 
+         v0nrm += v0[i][a]*v0[i][a];
+         v1nrm += rv[i][a]*rv[i][a];
+         vv += v0[i][a]*rv[i][a];
+      }
+      vacl += vv/(sqrt(v0nrm)*sqrt(v1nrm));
+    }
+
+    MPI_Allreduce(&vacl,&vac,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+    vac /= nglob;
+
   }
 
   /* Temperature control */
@@ -524,8 +497,8 @@ Evaluates physical properties: kinetic, potential & total energies.
   }
 
   /* Print the computed properties */
-  if (sid == 0) printf("%9.2f %9.6f %9.6f %9.6f  %9.6lf\n",
-                stepCount*DeltaT,temperature,potEnergy,totEnergy,msd);
+  if (sid == 0) printf("%9.2f %9.6f %9.6f %9.6f  %9.6lf %9.6lf\n",
+                stepCount*DeltaT,temperature,potEnergy,totEnergy,msd,vac);
 }
 
 /*----------------------------------------------------------------------
@@ -735,37 +708,39 @@ mvque[6][NBMAX]: mvque[ku][0] is the # of to-be-moved atoms to neighbor
 
       /* Message buffering */
       for (i=1; i<=nsd; i++) {
-        dbuf[10*(i-1)] = (double)atype[mvque[ku][i]];
+        dbuf[13*(i-1)] = (double)atype[mvque[ku][i]];
         for (a=0; a<3; a++) {
           /* Shift the coordinate origin */
-          dbuf[10*(i-1)+1+a] = r [mvque[ku][i]][a]-sv[ku][a]; 
-          dbuf[10*(i-1)+4+a] = rv[mvque[ku][i]][a];
-          dbuf[10*(i-1)+7+a] = r0[mvque[ku][i]][a]-sv[ku][a];
+          dbuf[13*(i-1)+1+a] = r [mvque[ku][i]][a]-sv[ku][a]; 
+          dbuf[13*(i-1)+4+a] = rv[mvque[ku][i]][a];
+          dbuf[13*(i-1)+7+a] = r0[mvque[ku][i]][a]-sv[ku][a];
+          dbuf[13*(i-1)+10+a] = v0[mvque[ku][i]][a];
           r[mvque[ku][i]][0] = MOVED_OUT; /* Mark the moved-out atom */
         }
       }
 
       /* Even node: send & recv, if not empty */
       if (myparity[kd] == 0) {
-        MPI_Send(dbuf,10*nsd,MPI_DOUBLE,inode_s,130,MPI_COMM_WORLD);
-        MPI_Recv(dbufr,10*nrc,MPI_DOUBLE,inode_r,140,MPI_COMM_WORLD,&status);
+        MPI_Send(dbuf,13*nsd,MPI_DOUBLE,inode_s,130,MPI_COMM_WORLD);
+        MPI_Recv(dbufr,13*nrc,MPI_DOUBLE,inode_r,140,MPI_COMM_WORLD,&status);
       }
       /* Odd node: recv & send, if not empty */
       else if (myparity[kd] == 1) {
-        MPI_Recv(dbufr,10*nrc,MPI_DOUBLE,inode_r,130,MPI_COMM_WORLD,&status);
-        MPI_Send(dbuf,10*nsd,MPI_DOUBLE,inode_s,140,MPI_COMM_WORLD);
+        MPI_Recv(dbufr,13*nrc,MPI_DOUBLE,inode_r,130,MPI_COMM_WORLD,&status);
+        MPI_Send(dbuf,13*nsd,MPI_DOUBLE,inode_s,140,MPI_COMM_WORLD);
       }
       /* Single layer: Exchange information with myself */
       else
-        for (i=0; i<10*nrc; i++) dbufr[i] = dbuf[i];
+        for (i=0; i<13*nrc; i++) dbufr[i] = dbuf[i];
 
       /* Message storing */
       for (i=0; i<nrc; i++) {
-        atype [n+newim+i] = (int) dbufr[10*i];
+        atype [n+newim+i] = (int) dbufr[13*i];
         for (a=0; a<3; a++) {
-          r [n+newim+i][a] = dbufr[10*i+1+a]; 
-          rv[n+newim+i][a] = dbufr[10*i+4+a];
-          r0[n+newim+i][a] = dbufr[10*i+7+a]; 
+          r [n+newim+i][a] = dbufr[13*i+1+a]; 
+          rv[n+newim+i][a] = dbufr[13*i+4+a];
+          r0[n+newim+i][a] = dbufr[13*i+7+a]; 
+          v0[n+newim+i][a] = dbufr[13*i+10+a]; 
         }
       }
 
@@ -790,6 +765,7 @@ mvque[6][NBMAX]: mvque[ku][0] is the # of to-be-moved atoms to neighbor
         r [ipt][a] = r [i][a];
         rv[ipt][a] = rv[i][a];
         r0[ipt][a] = r0[i][a];
+        v0[ipt][a] = v0[i][a];
       }
       ++ipt;
     }
@@ -867,6 +843,28 @@ for (ib=0; ib<NC; ib++) {
    ftable[ia][ib][NTMAX] = 0.0;
 }}
    
+}
+
+/*---------------------------------------------------------------------*/
+void gather_coordinates() {
+/*---------------------------------------------------------------------
+----------------------------------------------------------------------*/
+  int i,a,nex;
+  nex=0;
+  MPI_Exscan(&n,&nex,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+  printf("sid=%d n=%d nex=%d\n",sid,n,nex);
+
+  // clean up the global coordinate
+  for(i=0; i<NEMAX; i++)
+    for(a=0; a<3; a++)
+      rg[i+nex][a]=0.0; 
+
+  for(i=0; i<n; i++){
+    for(a=0; a<3; a++) {
+      rg[i+nex][a]=r[i][a];
+    }
+  }
+
 }
 
 /*---------------------------------------------------------------------*/
