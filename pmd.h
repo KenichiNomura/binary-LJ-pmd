@@ -113,7 +113,7 @@ double vtable[NC][NC][NTMAX+1], ftable[NC][NC][NTMAX+1];
 
 // gr
 uint32_t *hist, nbin;
-double grcut = 10, grdr = 0.2;
+double grcut = 5, grdr = 0.05;
 
 /* Input data-----------------------------------------------------------
 
@@ -164,7 +164,7 @@ int bmv(double* ri, int ku);
 double sqrt_nr(double y);
 void write_config(int n);
 void gather_coordinates(); 
-void compute_gr();
+void compute_gr(double* hist, int nbin, double grrcut, double grdr);
 double compute_vac();
 double compute_msd();
 void analysis_manager(int phase);

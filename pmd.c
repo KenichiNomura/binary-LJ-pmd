@@ -30,9 +30,6 @@ int main(int argc, char **argv) {
             eval_props();
             write_config(stepCount);
 
-            gather_coordinates();
-            compute_gr(0, 5.0, 0.2);
-
             analysis_manager(1);
         }
     }
@@ -41,7 +38,6 @@ int main(int argc, char **argv) {
 
     /* save last config */
     write_config(-1);
-    compute_gr(-1, 5.0, 0.2);
 
     analysis_manager(2);
 
@@ -862,21 +858,24 @@ void gather_coordinates() {
     free(rbuf);
 }
 /*---------------------------------------------------------------------*/
-void compute_gr(int output, double grrcut, double grdr) {
+void compute_gr(double* hist, int nbin, double grrcut, double grdr) {
     /*---------------------------------------------------------------------
     ----------------------------------------------------------------------*/
     int i,j,a;
-    int idx,nbin,*hist,*rbuf;
-    double rdif,rr,denom,pi=3.14159265359;
+    int idx;
+    double *rbuf, *sbuf;
+    double rdif,rr;
+    FILE *fp;
 
-    nbin = grrcut/grdr;
+    //nbin = grrcut/grdr;
     //printf("sid = %d, grdr = %lf, nbin=%d\n", sid, grdr, nbin);
+    //hist = (int *)malloc(sizeof(int )*nbin);
 
-    hist = (int *)malloc(sizeof(int )*nbin);
-    for(i=0; i<nbin; i++) hist[i]=0;
+    sbuf = (double *)malloc(sizeof(double)*nbin);
+    for(i=0; i<nbin; i++) sbuf[i]=0.0;
 
-    for(i=sid; i<nglob; i+=nprocs) {
-        for(j=0; j<nglob; j++) {
+    for(i=sid; i<nglob-1; i+=nprocs) {
+        for(j=i+1; j<nglob; j++) {
 
             if(i==j) continue;
 
@@ -891,38 +890,18 @@ void compute_gr(int output, double grrcut, double grdr) {
             if(rr<grrcut)
             {
                 idx = rr/grdr;
-                hist[idx]++;
+                sbuf[idx]+=2.0;
             }
         }
     }
 
-    rbuf = (int *)malloc(sizeof(int )*nbin);
-    MPI_Allreduce(hist,rbuf,nbin,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+    rbuf = (double *)malloc(sizeof(double)*nbin);
+    MPI_Allreduce(sbuf,rbuf,nbin,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
 
     for(int i=0; i<nbin; i++)
-        hist[i]=rbuf[i];
+        hist[i]+=rbuf[i];
 
-    if(sid==0 && output==-1)
-    {
-        //printf("%d compute_gr\n",sid);
-        for(int i=1; i<nbin; i++)
-        {
-            rr = i*grdr;
-            denom = 4.0*pi*(rr*rr*grdr*Density)*nglob;
-            printf("%lf  %lf %lf %d\n", rr, (double)hist[i]/denom, denom, hist[i]);
-        }
-
-        /*
-            printf("%d\n",nglob);
-            printf("%f %f %f\n",al[0],al[1],al[2]);
-            for(i=0; i<nglob; i++)
-            {
-              printf("%d %f %f %f\n",12,rg[i][0],rg[i][1],rg[i][2]);
-            }
-        */
-    }
-
-    free(hist);
+    free(sbuf);
     free(rbuf);
 }
 
@@ -979,12 +958,17 @@ double compute_msd()
 
 /*---------------------------------------------------------------------*/
 void analysis_manager(int phase) {
+    /*---------------------------------------------------------------------*/
+    /*---------------------------------------------------------------------*/
 
     static int idx = 0, NSAMPLES = 50;
     static int *COUNT;
     static double *MSD, *VAC, *GR;
+    static double grdr=0.1, grrcut=5;
+    static int nbin, grcount;
     int i,j,a;
-    FILE *msd, *vac;
+    double gr,rr,cr,denom,pi=3.14159265359;
+    FILE *fp;
 
     enum {init,record,final};
 
@@ -1000,6 +984,12 @@ void analysis_manager(int phase) {
             MSD[i]=0.0;
             VAC[i]=0.0;
         }
+
+        /* get number of bins and reset gr*/
+        nbin=grrcut/grdr;
+        GR = (double *) malloc(sizeof(double)*nbin);
+        for(int i=0; i<nbin; i++) GR[i]=0.0;
+        grcount = 0;
 
         /* Initialize the initial coordinate */
         for (j=0; j<n; j++)
@@ -1028,6 +1018,10 @@ void analysis_manager(int phase) {
             }
         }
 
+        grcount++;
+        gather_coordinates();
+        compute_gr(GR, nbin, grrcut, grdr);
+
         MSD[idx] += compute_msd();
         VAC[idx] += compute_vac();
         COUNT[idx]++;
@@ -1037,23 +1031,39 @@ void analysis_manager(int phase) {
         break;
 
     case (final):
-        msd = fopen("msd.d","w");
-        for(int i=0; i<NSAMPLES; i++)
-        {
-            if(COUNT[i]>0)
-                fprintf(msd,"%d %lf %d\n", i, MSD[i]/COUNT[i], COUNT[i]);
-        }
-        fclose(msd);
-        free(MSD);
 
-        vac = fopen("vac.d","w");
-        for(int i=0; i<NSAMPLES; i++)
+        if(sid==0)
         {
-            if(COUNT[i]>0)
-                fprintf(vac,"%d %lf %d\n", i, VAC[i]/COUNT[i], COUNT[i]);
+            fp = fopen("msd.d","w");
+            for(int i=0; i<NSAMPLES; i++)
+            {
+                if(COUNT[i]>0)
+                    fprintf(fp,"%d %lf %d\n", i, MSD[i]/COUNT[i], COUNT[i]);
+            }
+            fclose(fp);
+            free(MSD);
+
+            fp = fopen("vac.d","w");
+            for(int i=0; i<NSAMPLES; i++)
+            {
+                if(COUNT[i]>0)
+                    fprintf(fp,"%d %lf %d\n", i, VAC[i]/COUNT[i], COUNT[i]);
+            }
+            fclose(fp);
+            free(VAC);
+
+            fp=fopen("gr.d","w");
+            cr=0.0;
+            for(int i=1; i<nbin; i++)
+            {
+                rr = i*grdr;
+                denom = 4.0*pi*(rr*rr*grdr*Density)*nglob;
+                gr = (double)GR[i]/denom/grcount;
+                cr += gr;
+                fprintf(fp,"%lf  %lf %lf\n", rr, gr, cr);
+            }
+            fclose(fp);
         }
-        fclose(vac);
-        free(VAC);
 
         break;
 
