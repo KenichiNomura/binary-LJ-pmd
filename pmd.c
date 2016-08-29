@@ -20,6 +20,9 @@ int main(int argc, char **argv) {
     atom_copy();
     compute_accel(); /* Computes initial accelerations */
 
+    analysis_manager(0);
+    analysis_manager(1);
+
     cpu1 = MPI_Wtime();
     for (stepCount=currCount; stepCount<=currCount+StepLimit; stepCount++) {
         single_step();
@@ -28,7 +31,9 @@ int main(int argc, char **argv) {
             write_config(stepCount);
 
             gather_coordinates();
-            compute_gr(0);
+            compute_gr(0, 5.0, 0.2);
+
+            analysis_manager(1);
         }
     }
     cpu = MPI_Wtime() - cpu1;
@@ -36,7 +41,9 @@ int main(int argc, char **argv) {
 
     /* save last config */
     write_config(-1);
-    compute_gr(-1);
+    compute_gr(-1, 5.0, 0.2);
+
+    analysis_manager(2);
 
     MPI_Finalize(); /* Clean up the MPI environment */
 }
@@ -855,16 +862,15 @@ void gather_coordinates() {
     free(rbuf);
 }
 /*---------------------------------------------------------------------*/
-void compute_gr(int output) {
+void compute_gr(int output, double grrcut, double grdr) {
     /*---------------------------------------------------------------------
     ----------------------------------------------------------------------*/
     int i,j,a;
     int idx,nbin,*hist,*rbuf;
-    double dr,rdif,rr,denom,rcut=5,pi=3.14159265359;
+    double rdif,rr,denom,pi=3.14159265359;
 
-    dr = 0.2;
-    nbin = rcut/dr;
-    //printf("sid = %d, dr = %lf, nbin=%d\n", sid, dr, nbin);
+    nbin = grrcut/grdr;
+    //printf("sid = %d, grdr = %lf, nbin=%d\n", sid, grdr, nbin);
 
     hist = (int *)malloc(sizeof(int )*nbin);
     for(i=0; i<nbin; i++) hist[i]=0;
@@ -882,9 +888,9 @@ void compute_gr(int output) {
                 rr += rdif*rdif;
             }
             rr = sqrt(rr);
-            if(rr<rcut)
+            if(rr<grrcut)
             {
-                idx = rr/dr;
+                idx = rr/grdr;
                 hist[idx]++;
             }
         }
@@ -901,8 +907,8 @@ void compute_gr(int output) {
         //printf("%d compute_gr\n",sid);
         for(int i=1; i<nbin; i++)
         {
-            rr = i*dr;
-            denom = 4.0*pi*(rr*rr*dr*Density)*nglob;
+            rr = i*grdr;
+            denom = 4.0*pi*(rr*rr*grdr*Density)*nglob;
             printf("%lf  %lf %lf %d\n", rr, (double)hist[i]/denom, denom, hist[i]);
         }
 
@@ -971,6 +977,90 @@ double compute_msd()
     return msd;
 }
 
+/*---------------------------------------------------------------------*/
+void analysis_manager(int phase) {
+
+    static int idx = 0, NSAMPLES = 50;
+    static int *COUNT;
+    static double *MSD, *VAC, *GR;
+    int i,j,a;
+    FILE *msd, *vac;
+
+    enum {init,record,final};
+
+    switch(phase)
+    {
+    case (init):
+        COUNT = (int *) malloc(sizeof(int)*NSAMPLES);
+        MSD = (double *) malloc(sizeof(double)*NSAMPLES);
+        VAC = (double *) malloc(sizeof(double)*NSAMPLES);
+        for(int i=0; i<NSAMPLES; i++)
+        {
+            COUNT[i]=0;
+            MSD[i]=0.0;
+            VAC[i]=0.0;
+        }
+
+        /* Initialize the initial coordinate */
+        for (j=0; j<n; j++)
+            for(a=0; a<3; a++)
+            {
+                r0[j][a] = r[j][a];
+                v0[j][a] = rv[j][a];
+            }
+
+        break;
+
+    case (record):
+
+        if(idx==NSAMPLES)
+        {
+            idx=0;
+
+            /* Initialize the initial coordinate */
+            for (j=0; j<n; j++)
+            {
+                for(a=0; a<3; a++)
+                {
+                    r0[j][a] = r[j][a];
+                    v0[j][a] = rv[j][a];
+                }
+            }
+        }
+
+        MSD[idx] += compute_msd();
+        VAC[idx] += compute_vac();
+        COUNT[idx]++;
+
+        idx++;
+
+        break;
+
+    case (final):
+        msd = fopen("msd.d","w");
+        for(int i=0; i<NSAMPLES; i++)
+        {
+            if(COUNT[i]>0)
+                fprintf(msd,"%d %lf %d\n", i, MSD[i]/COUNT[i], COUNT[i]);
+        }
+        fclose(msd);
+        free(MSD);
+
+        vac = fopen("vac.d","w");
+        for(int i=0; i<NSAMPLES; i++)
+        {
+            if(COUNT[i]>0)
+                fprintf(vac,"%d %lf %d\n", i, VAC[i]/COUNT[i], COUNT[i]);
+        }
+        fclose(vac);
+        free(VAC);
+
+        break;
+
+    default:
+        break;
+    }
+}
 
 /*---------------------------------------------------------------------*/
 void write_config(int nstep) {
@@ -1031,7 +1121,7 @@ void write_config(int nstep) {
 
     // write atom type, position, velocity & close file
     for(a=0; a<n; a++) {
-        fprintf(fp,"Ar%d %lf %lf %lf %lf %lf %lf\n",
+        fprintf(fp,"%d %lf %lf %lf %lf %lf %lf\n",
                 atype[a], r[a][0]+rs[0],r[a][1]+rs[1],r[a][2]+rs[2],
                 rv[a][0],rv[a][1],rv[a][2]);
     }

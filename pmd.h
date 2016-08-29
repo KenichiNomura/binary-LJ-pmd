@@ -167,5 +167,6 @@ void gather_coordinates();
 void compute_gr();
 double compute_vac();
 double compute_msd();
+void analysis_manager(int phase);
 /*--------------------------------------------------------------------*/
 
