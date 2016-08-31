@@ -13,7 +13,7 @@ int main(int argc, char **argv) {
     MPI_Comm_rank(MPI_COMM_WORLD, &sid);  /* My processor ID */
     MPI_Comm_size(MPI_COMM_WORLD, &nprocs);  /* # of processors */
 
-    init_params();
+    init_params(argc, argv);
     make_tables();
     set_topology();
     init_conf();
@@ -28,10 +28,12 @@ int main(int argc, char **argv) {
         single_step();
         if (stepCount%StepAvg == 0) {
             eval_props();
-            write_config(stepCount);
 
             analysis_manager(runtime);
         }
+        // save config every 1000 MD steps
+        if (stepCount%1000 == 0)
+            write_config(stepCount);
     }
     cpu = MPI_Wtime() - cpu1;
     if (sid == 0) printf("CPU & COMT = %le %le\n",cpu,comt);
@@ -45,7 +47,7 @@ int main(int argc, char **argv) {
 }
 
 /*--------------------------------------------------------------------*/
-void init_params() {
+void init_params(int argc, char **argv) {
     /*----------------------------------------------------------------------
     Initializes parameters.
     ----------------------------------------------------------------------*/
@@ -64,6 +66,22 @@ void init_params() {
     fscanf(fp,"%d",&StepAvg);
     fclose(fp);
 
+    for(a=0; a<argc; a++)
+    {
+        if(strncmp(argv[a],"-m",2)==0)
+            mdmode = atoi(argv[a+1]);
+        if(strncmp(argv[a],"-it",3)==0)
+            InitTemp = atof(argv[a+1]);
+        if(strncmp(argv[a],"-dt",3)==0)
+            DeltaT = atof(argv[a+1]);
+        if(strncmp(argv[a],"-ds",3)==0)
+            Density = atof(argv[a+1]);
+        if(strncmp(argv[a],"-sl",3)==0)
+            StepLimit = atoi(argv[a+1]);
+        if(strncmp(argv[a],"-sa",3)==0)
+            StepAvg = atoi(argv[a+1]);
+    }
+
     nproc=vproc[0]*vproc[1]*vproc[2];
 
     /* Vector index of this processor */
@@ -79,9 +97,18 @@ void init_params() {
         ol[a]=al[a]*vid[a];
     }
     if (sid == 0) {
-        printf("mdmode: %d\n",mdmode);
+        printf("---------------------------------------------\n");
+        printf("mdmode  %d\n",mdmode);
+        printf("vproc[0:2]  %d %d %d\n",vproc[0],vproc[1],vproc[2]);
+        printf("InitUcell[0:2]  %d %d %d\n",InitUcell[0],InitUcell[1],InitUcell[2]);
+        printf("Density  %f\n",Density);
+        printf("InitTemp  %f\n",InitTemp);
+        printf("DeltaT  %f\n",DeltaT);
+        printf("StepLimit  %d\n",StepLimit);
+        printf("StepAvg  %d\n",StepAvg);
         printf("Global MD box (gl): %9.2f %9.2f %9.2f\n",gl[0],gl[1],gl[2]);
         printf(" Local MD box (al): %9.2f %9.2f %9.2f\n",al[0],al[1],al[2]);
+        printf("---------------------------------------------\n");
     }
     //printf("MD box origin (ol): %9.2f %9.2f %9.2f\n",ol[0],ol[1],ol[2]);
 
@@ -773,18 +800,18 @@ void make_tables() {
         }
     }
 
-/*
-//aa&ss values taken from Srikanth et al., Nature, p554, vol. 398 (1998)
-    aa[0][0]=1.0;
-    aa[0][1]=1.5;
-    aa[1][0]=1.5;
-    aa[1][1]=0.5;
+    /*
+    //aa&ss values taken from Srikanth et al., Nature, p554, vol. 398 (1998)
+        aa[0][0]=1.0;
+        aa[0][1]=1.5;
+        aa[1][0]=1.5;
+        aa[1][1]=0.5;
 
-    ss[0][0]=1.0;
-    ss[0][1]=0.8;
-    ss[1][0]=0.8;
-    ss[1][1]=0.88;
-*/
+        ss[0][0]=1.0;
+        ss[0][1]=0.8;
+        ss[1][0]=0.8;
+        ss[1][1]=0.88;
+    */
 
 // For each sample point, calculate the value of potential table elements
 // First creat the tables without the energy cofficient, then multiply aa[][].
@@ -813,7 +840,6 @@ void make_tables() {
                 ftable[ia][ib][i] = (48.0 * ri12 - 24.0 * ri6) * ri2 - foffset * ri;
                 vtable[ia][ib][i] *= aa[ia][ib];
                 ftable[ia][ib][i] *= aa[ia][ib];
-                //if(i%20==0 && sid==0) printf("%d %d %f %f %f %f\n", ia, ib, currentr, currentr2, vtable[ia][ib][i],ftable[ia][ib][i]);
             }
 
             //Take care of the last point
@@ -862,8 +888,8 @@ void gather_coordinates() {
 /*---------------------------------------------------------------------*/
 void compute_gr(double* hist, int nbin, double grrcut, double grdr) {
     /*---------------------------------------------------------------------
-	this function computes g(r) based on current atom coordinates 
-	and append into hist array, helps increasing the number of sampling. 
+    this function computes g(r) based on current atom coordinates
+    and append into hist array, helps increasing the number of sampling.
     ----------------------------------------------------------------------*/
     int i,j,a;
     int idx;
@@ -889,8 +915,8 @@ void compute_gr(double* hist, int nbin, double grrcut, double grdr) {
             if(rr<grrcut)
             {
                 idx = rr/grdr;
-// increment hist by 2 since we apply i<j condition 
-                sbuf[idx]+=2.0; 
+// increment hist by 2 since we apply i<j condition
+                sbuf[idx]+=2.0;
             }
         }
     }
@@ -908,7 +934,7 @@ void compute_gr(double* hist, int nbin, double grrcut, double grdr) {
 /*---------------------------------------------------------------------*/
 double compute_vac()
 /*---------------------------------------------------------------------
- * return velocity auto-correlation 
+ * return velocity auto-correlation
 ----------------------------------------------------------------------*/
 {
     int i, a;
@@ -1101,7 +1127,7 @@ void write_config(int nstep) {
 
     // Open File
     if(nstep==-1) {
-        // nstep==1 save final configulation for next run
+        // nstep==-1 save final configulation for next run
         if(sid==0) {
             fp = fopen("pmd.d","w");
         }

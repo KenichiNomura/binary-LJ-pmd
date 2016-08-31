@@ -4,6 +4,7 @@ pmd.h is an include file for a parallel MD program, pmd.c.
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 #include <math.h>
 #include "mpi.h"
 
