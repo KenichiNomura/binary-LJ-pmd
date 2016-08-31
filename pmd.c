@@ -773,6 +773,7 @@ void make_tables() {
         }
     }
 
+/*
 //aa&ss values taken from Srikanth et al., Nature, p554, vol. 398 (1998)
     aa[0][0]=1.0;
     aa[0][1]=1.5;
@@ -783,6 +784,7 @@ void make_tables() {
     ss[0][1]=0.8;
     ss[1][0]=0.8;
     ss[1][1]=0.88;
+*/
 
 // For each sample point, calculate the value of potential table elements
 // First creat the tables without the energy cofficient, then multiply aa[][].
@@ -963,7 +965,7 @@ void analysis_manager(int phase) {
     static double *MSD, *VAC;
     static int idx = 0, NSAMPLES = 50;
 
-    static double  *GR;
+    static double *GR;
     static double grdr=0.02, grrcut=5;
     static int nbin, grcount;
     int i,j,a;
@@ -1015,11 +1017,12 @@ void analysis_manager(int phase) {
                     v0[j][a] = rv[j][a];
                 }
             }
-        }
 
-        grcount++;
-        gather_coordinates();
-        compute_gr(GR, nbin, grrcut, grdr);
+            grcount++;
+            gather_coordinates();
+            compute_gr(GR, nbin, grrcut, grdr);
+
+        }
 
         MSD[idx] += compute_msd();
         VAC[idx] += compute_vac();

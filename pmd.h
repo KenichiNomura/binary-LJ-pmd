@@ -113,7 +113,6 @@ double vtable[NC][NC][NTMAX+1], ftable[NC][NC][NTMAX+1];
 
 // gr
 uint32_t *hist, nbin;
-double grcut = 5, grdr = 0.05;
 
 /* Input data-----------------------------------------------------------
 
