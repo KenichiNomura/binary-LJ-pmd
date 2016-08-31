@@ -167,6 +167,8 @@ void gather_coordinates();
 void compute_gr(double* hist, int nbin, double grrcut, double grdr);
 double compute_vac();
 double compute_msd();
+
+enum {init,runtime,final};
 void analysis_manager(int phase);
 /*--------------------------------------------------------------------*/
 

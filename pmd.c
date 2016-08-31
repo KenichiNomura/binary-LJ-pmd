@@ -20,8 +20,8 @@ int main(int argc, char **argv) {
     atom_copy();
     compute_accel(); /* Computes initial accelerations */
 
-    analysis_manager(0);
-    analysis_manager(1);
+    analysis_manager(init);
+    analysis_manager(runtime);
 
     cpu1 = MPI_Wtime();
     for (stepCount=currCount; stepCount<=currCount+StepLimit; stepCount++) {
@@ -30,7 +30,7 @@ int main(int argc, char **argv) {
             eval_props();
             write_config(stepCount);
 
-            analysis_manager(1);
+            analysis_manager(runtime);
         }
     }
     cpu = MPI_Wtime() - cpu1;
@@ -39,7 +39,7 @@ int main(int argc, char **argv) {
     /* save last config */
     write_config(-1);
 
-    analysis_manager(2);
+    analysis_manager(final);
 
     MPI_Finalize(); /* Clean up the MPI environment */
 }
@@ -860,16 +860,13 @@ void gather_coordinates() {
 /*---------------------------------------------------------------------*/
 void compute_gr(double* hist, int nbin, double grrcut, double grdr) {
     /*---------------------------------------------------------------------
+	this function computes g(r) based on current atom coordinates 
+	and append into hist array, helps increasing the number of sampling. 
     ----------------------------------------------------------------------*/
     int i,j,a;
     int idx;
     double *rbuf, *sbuf;
     double rdif,rr;
-    FILE *fp;
-
-    //nbin = grrcut/grdr;
-    //printf("sid = %d, grdr = %lf, nbin=%d\n", sid, grdr, nbin);
-    //hist = (int *)malloc(sizeof(int )*nbin);
 
     sbuf = (double *)malloc(sizeof(double)*nbin);
     for(i=0; i<nbin; i++) sbuf[i]=0.0;
@@ -890,7 +887,8 @@ void compute_gr(double* hist, int nbin, double grrcut, double grdr) {
             if(rr<grrcut)
             {
                 idx = rr/grdr;
-                sbuf[idx]+=2.0;
+// increment hist by 2 since we apply i<j condition 
+                sbuf[idx]+=2.0; 
             }
         }
     }
@@ -908,7 +906,7 @@ void compute_gr(double* hist, int nbin, double grrcut, double grdr) {
 /*---------------------------------------------------------------------*/
 double compute_vac()
 /*---------------------------------------------------------------------
- * Compute velocity auto-correlation
+ * return velocity auto-correlation 
 ----------------------------------------------------------------------*/
 {
     int i, a;
@@ -936,7 +934,7 @@ double compute_vac()
 /*---------------------------------------------------------------------*/
 double compute_msd()
 /*---------------------------------------------------------------------
- * Compute mean square displacement
+ * return mean square displacement
 ----------------------------------------------------------------------*/
 {
     int i, a;
@@ -961,16 +959,17 @@ void analysis_manager(int phase) {
     /*---------------------------------------------------------------------*/
     /*---------------------------------------------------------------------*/
 
-    static int idx = 0, NSAMPLES = 50;
     static int *COUNT;
-    static double *MSD, *VAC, *GR;
-    static double grdr=0.1, grrcut=5;
+    static double *MSD, *VAC;
+    static int idx = 0, NSAMPLES = 50;
+
+    static double  *GR;
+    static double grdr=0.02, grrcut=5;
     static int nbin, grcount;
     int i,j,a;
     double gr,rr,cr,denom,pi=3.14159265359;
-    FILE *fp;
 
-    enum {init,record,final};
+    FILE *fp;
 
     switch(phase)
     {
@@ -1001,7 +1000,7 @@ void analysis_manager(int phase) {
 
         break;
 
-    case (record):
+    case (runtime):
 
         if(idx==NSAMPLES)
         {
@@ -1038,7 +1037,7 @@ void analysis_manager(int phase) {
             for(int i=0; i<NSAMPLES; i++)
             {
                 if(COUNT[i]>0)
-                    fprintf(fp,"%d %lf %d\n", i, MSD[i]/COUNT[i], COUNT[i]);
+                    fprintf(fp,"%d,%lf,%d\n", i, MSD[i]/COUNT[i], COUNT[i]);
             }
             fclose(fp);
             free(MSD);
@@ -1047,7 +1046,7 @@ void analysis_manager(int phase) {
             for(int i=0; i<NSAMPLES; i++)
             {
                 if(COUNT[i]>0)
-                    fprintf(fp,"%d %lf %d\n", i, VAC[i]/COUNT[i], COUNT[i]);
+                    fprintf(fp,"%d,%lf,%d\n", i, VAC[i]/COUNT[i], COUNT[i]);
             }
             fclose(fp);
             free(VAC);
@@ -1057,10 +1056,10 @@ void analysis_manager(int phase) {
             for(int i=1; i<nbin; i++)
             {
                 rr = i*grdr;
-                denom = 4.0*pi*(rr*rr*grdr*Density)*nglob;
-                gr = (double)GR[i]/denom/grcount;
-                cr += gr;
-                fprintf(fp,"%lf  %lf %lf\n", rr, gr, cr);
+                denom = 4.0*pi*(rr*rr*grdr*Density);
+                gr = (double)GR[i]/grcount/nglob/denom;
+                cr += GR[i]/grcount/nglob;
+                fprintf(fp,"%lf,%lf,%lf,%d\n", rr, gr, cr, grcount);
             }
             fclose(fp);
         }
