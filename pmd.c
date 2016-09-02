@@ -915,7 +915,7 @@ void compute_gr(double* hist, int nbin, double grrcut, double grdr) {
             if(rr<grrcut)
             {
                 idx = rr/grdr;
-// increment hist by 2 since we apply i<j condition
+// increment hist by 2 since we apply the i<j condition.
                 sbuf[idx]+=2.0;
             }
         }
@@ -938,19 +938,18 @@ double compute_vac()
 ----------------------------------------------------------------------*/
 {
     int i, a;
-    double  vv,v0nrm,v1nrm,vacl,vac=0.0;
+    double  vv,v0nrm,vacl,vac=0.0;
 
     vacl=0.0;
     for (i=0; i<n; i++) {
         vv=0.0;
         v0nrm=0.0;
-        v1nrm=0.0;
         for (a=0; a<3; a++) {
             v0nrm += v0[i][a]*v0[i][a];
-            v1nrm += rv[i][a]*rv[i][a];
             vv += v0[i][a]*rv[i][a];
         }
-        vacl += vv/(sqrt(v0nrm)*sqrt(v1nrm));
+        //vacl += vv/v0nrm;
+        vacl += vv;
     }
 
     MPI_Allreduce(&vacl,&vac,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
@@ -987,15 +986,20 @@ void analysis_manager(int phase) {
     /*---------------------------------------------------------------------*/
     /*---------------------------------------------------------------------*/
 
+    static double pi=3.14159265359;
+
     static int *COUNT;
     static double *MSD, *VAC;
     static int idx = 0, NSAMPLES = 50;
+    int ctime;
+    double wg,ft;
 
     static double *GR;
-    static double grdr=0.02, grrcut=5;
+    static double grdr=0.02, grrcut;
     static int nbin, grcount;
     int i,j,a;
-    double gr,rr,cr,denom,pi=3.14159265359;
+    double gr,rr,cr,denom;
+    double sq,kk;
 
     FILE *fp;
 
@@ -1011,6 +1015,11 @@ void analysis_manager(int phase) {
             MSD[i]=0.0;
             VAC[i]=0.0;
         }
+
+	// get the shortest edge, make it half. 
+	grrcut = gl[0] > gl[1] ? gl[1] : gl[0];
+	grrcut = grrcut > gl[2] ? gl[2] : grrcut;
+	grrcut = 0.5*grrcut;
 
         /* get number of bins and reset gr*/
         nbin=grrcut/grdr;
@@ -1044,6 +1053,9 @@ void analysis_manager(int phase) {
                 }
             }
 
+            // compute_gr() takes into account all atom coordinates so that
+            // g(r) is not limited by the cutoff length or local MDbox size;
+            // needs to call gather_coordinate() prior to compute_gr().
             grcount++;
             gather_coordinates();
             compute_gr(GR, nbin, grrcut, grdr);
@@ -1062,35 +1074,85 @@ void analysis_manager(int phase) {
 
         if(sid==0)
         {
+            //-------------------------------------------------
             fp = fopen("msd.d","w");
             for(int i=0; i<NSAMPLES; i++)
             {
+                ctime = i*StepAvg;
                 if(COUNT[i]>0)
-                    fprintf(fp,"%d,%lf,%d\n", i, MSD[i]/COUNT[i], COUNT[i]);
+                    MSD[i]/=COUNT[i];
+		else
+                    MSD[i]=0.0;
+
+                fprintf(fp,"%d,%lf,%d\n", ctime, MSD[i], COUNT[i]);
             }
             fclose(fp);
             free(MSD);
 
+            //-------------------------------------------------
             fp = fopen("vac.d","w");
             for(int i=0; i<NSAMPLES; i++)
             {
+                ctime = i*StepAvg;
                 if(COUNT[i]>0)
-                    fprintf(fp,"%d,%lf,%d\n", i, VAC[i]/COUNT[i], COUNT[i]);
+                    VAC[i]/=COUNT[i];
+		else
+                    VAC[i]=0.0;
+
+                fprintf(fp,"%d,%lf,%d\n", ctime, VAC[i], COUNT[i]);
             }
             fclose(fp);
+
+            fp = fopen("ft.d","w");
+            for(int a=1; a<100; a++)
+            {
+                wg = pi*(double)a/100;
+                ft = 0.0;
+                for(int i=0; i<NSAMPLES; i++)
+                {
+                    ft += VAC[i]*cos(wg*i)*StepAvg*DeltaT;
+                }
+                fprintf(fp,"%lf,%lf\n", wg, ft);
+            }
+            fclose(fp);
+
             free(VAC);
 
-            fp=fopen("gr.d","w");
+            //-------------------------------------------------
+
             cr=0.0;
+
+            fp=fopen("gr.d","w");
             for(int i=1; i<nbin; i++)
             {
                 rr = i*grdr;
                 denom = 4.0*pi*(rr*rr*grdr*Density);
-                gr = (double)GR[i]/grcount/nglob/denom;
+                gr = GR[i]/grcount/nglob/denom;
                 cr += GR[i]/grcount/nglob;
                 fprintf(fp,"%lf,%lf,%lf,%d\n", rr, gr, cr, grcount);
+
+                GR[i] = gr; // keep the value for the sq calculation below
             }
             fclose(fp);
+
+            fp=fopen("sq.d","w");
+            for(int a=1; a<100; a++)
+            {
+                kk=2*pi*a*0.05;
+                sq = 0.0;
+
+                for(int i=1; i<nbin; i++)
+                {
+                    rr = i*grdr;
+                    sq += rr*sin(kk*rr)*(GR[i]-1.0)*grdr;
+                }
+
+                sq = 1.0 + 4*pi*Density*sq/kk;
+                fprintf(fp,"%lf,%lf\n", kk, sq);
+            }
+            fclose(fp);
+
+	    free(GR);
         }
 
         break;

@@ -1,9 +1,9 @@
-4
+1
 2 2 1
-8 8 16
+8 8 18
 1.0
-1.4
-0.01
+0.5
+0.005
 2000
 10
 --------------------------------------------
@@ -13,5 +13,5 @@ InitUcell[0],InitUcell[1],InitUcell[2]
 Density
 InitTemp
 DeltaT
-tepLimit
-tepAvg
+StepLimit
+StepAvg
