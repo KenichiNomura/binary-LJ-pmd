@@ -1,11 +1,18 @@
-#Binary Lennard-Jones parallel Molecular Dynamics Code
+#Binary Lennard-Jones parallel Molecular Dynamics
 
-The original code is taken from Prof. Aiichiro Nakano's class material; CS653 High-Performance Computing and Visualization. 
+This is yet another parallel molecular dynamics simulation code to compute mean square displacement, velocity autocorrelation function, Static structure factor, phonon density of state, pair distribution function and coordination function during simulation. It also comes with several utility tools including a shell script to setup computing environment at the HPC cluster and an iPython Notebook to plot the aformentioned properties into 2D graph.
+
+The original parallel L-J MD code is taken from Prof. Aiichiro Nakano's class material. See his class web sites for more information. 
+
+CSCI 596: SCIENTIFIC COMPUTING & VISUALIZATION
+
+http://cacs.usc.edu/education/cs596.html
+
+CS 653: High-Performance Computing and Visualization. 
+
 http://cacs.usc.edu/education/cs653-code.html
 
-In addition to the original parallel L-J potential MD code, mean square displacement, velocity autocorrelation function, Static structure factor, phonon density of state, pair distribution function and coordination function have been added, along with several utility tools to setup computing environment at the HPC cluster and a iPython Notebook script to plot the aformentioned properties into 2D graph.
-
-This code also supports binary LJ interatomic potential whose parameters are used in a glass forming material study by Stillinger et al. 
+This code also supports binary LJ interatomic potential. The used parameters are taken from a glass forming material study by Stillinger et al. 
 Signatures of distinct dynamical regimes in the energy landscape of a glass-forming liquid.
 http://www.nature.com/nature/journal/v393/n6685/abs/393554a0.html
 
