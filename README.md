@@ -16,22 +16,25 @@ This code also supports binary LJ interatomic potential. The used parameters are
 Signatures of distinct dynamical regimes in the energy landscape of a glass-forming liquid.
 http://www.nature.com/nature/journal/v393/n6685/abs/393554a0.html
 
+## Basic steps to perform MD simulation
 
-## Basics
-clean working directory 
+Move to working directory:
+> cd binary-LJ-pmd/
+
+clean up working directory:
 > make clean
 
-Setup enviroment
+Setup enviroment:
 > source ./util/setup.sh
 
-Compile
+Compile:
 > make
 
-Run
+Run:
 > mpirun -np 4 ./pmd (4 MPIrank case)
 
-## Molecualr Dynamics Parameters. 
-All necessary parameters to run this code is stored in pmd.in file, which is read from MPI processes at the begging of each run. pmd.in would look like, 
+## Molecualr Dynamics Parameters
+All necessary parameters to perform MD simulation are stored in pmd.in file. 'pmd.in' file is read from MPI processes at the begging of each run. Typical 'pmd.in' file would look like below.
 
 ```
 1                   // mdmode: 0=initial run, 1=normal run, 4=T control
