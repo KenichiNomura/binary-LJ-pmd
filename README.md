@@ -14,4 +14,10 @@ In addition to the original parallel L-J potential MD code, mean square displace
 
 > mpirun -np 4 ./pmd (4 MPIrank case)
 
+## Here are some system properties at different temperatures. 
+This system is thermalized at T = 0.8. All properties indicate that the system is solid. 
+<img src="https://github.com/KenichiNomura/binary-LJ-pmd/blob/master/docs/Temp0.8-Solid.png" width="400">
+
+This system is thermalized at T = 1.2 where the plots show liquid like behavior. 
+<img src="https://github.com/KenichiNomura/binary-LJ-pmd/blob/master/docs/Temp1.6-Melt.png" width="400">
 
