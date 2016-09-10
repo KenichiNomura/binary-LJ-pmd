@@ -52,7 +52,7 @@ Now you should be able to perform simulation. A standard way to execute a comman
 ```
 ./a.out
 ```
-but this is a *parallel* MD code so you have to call a MPI command, **mpirun**, to let the program and OS know how many MPI processes you will create. To do so, you give **-np** option and a interger before the program (here **pmd**) you want to run. Example below creates 2 MPI processes whose ranks are 0 and 1. If the system you are on has enouch resources, e.g. 2 CPU cores, your program will run at fastest speed. 
+but this is a *parallel* MD code so you have to call a MPI command, **mpirun**, to let the program and OS know how many MPI processes you will create. To do so, you give **-np** option and a interger before **pmd**. Example below creates 2 MPI processes whose ranks are 0 and 1. If the system you are on has enouch resources, e.g. 2 CPU cores, your program will run at fastest speed. 
 
 ```
 mpirun -np 2 ./pmd
@@ -74,12 +74,23 @@ Okay, hopefully you are able to run the code successfully now. Next step is to u
 
 ## Analysis
 
-### 1. Mean Square Displacement
-### 2. Velocity Autocorrelation Function
+### 1. Mean Square Displacement (MSD)
+output file: msd.d
+
+### 2. Velocity Autocorrelation Function (VAF)
+output file: vac.d
+
 ### 3. Pair Distribution Function
+output file: gr.d
+
 ### 4. Coordination Number
+output file: gr.d
+
 ### 5. Static Strcture Factor
+output file: sq.d
+
 ### 6. Phonon Density of State
+output file: ft.d
 
 ## Solid vs Liquid phase
 Here are some results of systems at different temperatures. 
@@ -88,7 +99,7 @@ Here are some results of systems at different temperatures.
 
 <img src="https://github.com/KenichiNomura/binary-LJ-pmd/blob/master/docs/Temp0.8-Solid.png" width="400">
 
-2) Thermalized at T = 1.2. MSD increases linearly wrt time, VAF die out quickly and PDF stays around 1 after the first peak. These are typical behavior of liqud.  
+2) Thermalized at T = 1.2. MSD increases linearly wrt time, VAF dies out quickly and PDF stays around 1 after the first peak. These are typical behaviors of liqud.  
 
 <img src="https://github.com/KenichiNomura/binary-LJ-pmd/blob/master/docs/Temp1.6-Melt.png" width="400">
 
