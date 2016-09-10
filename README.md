@@ -16,30 +16,55 @@ This code also supports binary LJ interatomic potential. The used parameters are
 Signatures of distinct dynamical regimes in the energy landscape of a glass-forming liquid.
 http://www.nature.com/nature/journal/v393/n6685/abs/393554a0.html
 
-## Basic steps to perform MD simulation
+## Steps to perform MD simulation
+### Download Source Code
+If you are not faimilier with github, go this page first **https://github.com/KenichiNomura/binary-LJ-pmd**. 
+You can download the source code to your compure by clicking **clone or download** button, then select **Download Zip** tab. You will have a file called **binary-LJ-pmd-master.zip** Aftre unzipped it, change directory to **binary-LJ-pmd**. 
+```
+cd binary-LJ-pmd/
+```
+You will be working in this directory most of time. 
 
-Move to working directory:
-> cd binary-LJ-pmd/
+### Setup Your Environment
+If you are using HPCC cluster, it is exteremely important to keep in mind that you **CAN NOT** run any program on the file servers. The file server is a shared resource among all students, staff and researchers and serving disk access to thousands of computing nodes. If your processe occupies CPU, memory, network traffic etc on the file server, it would impact to everyone using the HPCC cluster. Instead of using the shared machine you are allowed to grab some compute nodes from the cluster and work (compile/debug/run) there by using  **PBS interactive mode**.
+```
+qsub -I -d .
+```
 
-clean up working directory:
-> make clean
+Next step is set up your environment so that you can use compiler and Message Passing Interface (MPI) library to generate exectuable file. You need to **source** a shell script under **util** directory. 
+```
+source ./util/setup.sh
+```
+Please note that this **setup.sh** script works for HPCC environment only. 
 
-Setup enviroment:
-> source ./util/setup.sh
+Now you are ready to compile the code. To do so simply type **make** like below. 
+```
+make
+```
+You should see a file called **pmd** (* mark after the filename indicates this is an executable file)
+```
+$ ls
+Makefile   data/      pmd*       pmd.h      utils/
+README.md  docs/      pmd.c      pmd.in
+```
 
-Compile:
-> make
+Now you should be able to perform simulation. A standard way to execute a command is like typing 
+```
+./a.out
+```
+but this is a *parallel* MD code so you have to call a MPI command, **mpirun**, to let the program and OS know how many MPI processes you will create. To do so, you give **-np** option and a interger before the program (here **pmd**) you want to run. Example below creates 2 MPI processes whose ranks are 0 and 1. If the system you are on has enouch resources, e.g. 2 CPU cores, your program will run at fastest speed. 
 
-Run:
-> mpirun -np 4 ./pmd (4 MPIrank case)
+```
+mpirun -np 2 ./pmd
+```
 
-## Molecualr Dynamics Parameters
-All necessary parameters to perform MD simulation are stored in pmd.in file. 'pmd.in' file is read from MPI processes at the begging of each run. Typical 'pmd.in' file would look like below.
+## Input Parameters
+Okay, hopefully you are able to run the code successfully now. Next step is to understand input parameters so that you have full control of your simulations. All input parameters in **pmd.in** file, which typically looks like,
 
 ```
 1                   // mdmode: 0=initial run, 1=normal run, 4=T control
-2 2 1               // vproc[0],vproc[1],vproc[2]
-8 8 18              // InitUcell[0],InitUcell[1],InitUcell[2]
+2 1 1               // vproc[0],vproc[1],vproc[2]
+2 4 4              // InitUcell[0],InitUcell[1],InitUcell[2]
 1.0                 // Density
 0.5                 // InitTemp
 0.005               // DeltaT
@@ -47,14 +72,23 @@ All necessary parameters to perform MD simulation are stored in pmd.in file. 'pm
 10                  // StepAvg
 ```
 
-## Solid vs Liquid phase
-Here are some system properties at different temperatures. 
+## Analysis
 
-The system is thermalized at T = 0.8. All properties indicate that the system is solid. 
+### 1. Mean Square Displacement
+### 2. Velocity Autocorrelation Function
+### 3. Pair Distribution Function
+### 4. Coordination Number
+### 5. Static Strcture Factor
+### 6. Phonon Density of State
+
+## Solid vs Liquid phase
+Here are some results of systems at different temperatures. 
+
+1) Thermalized at T = 0.8. The flat MSD and oscillating VAF with rather long correlation indiate that the system is solid. 
 
 <img src="https://github.com/KenichiNomura/binary-LJ-pmd/blob/master/docs/Temp0.8-Solid.png" width="400">
 
-The system is thermalized at T = 1.2 where the plots show liquid like behavior. 
+2) Thermalized at T = 1.2. MSD increases linearly wrt time, VAF die out quickly and PDF stays around 1 after the first peak. These are typical behavior of liqud.  
 
 <img src="https://github.com/KenichiNomura/binary-LJ-pmd/blob/master/docs/Temp1.6-Melt.png" width="400">
 
