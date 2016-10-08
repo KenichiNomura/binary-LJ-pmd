@@ -85,16 +85,19 @@ temperature = Current temperature.
 stepCount = Current time step.
 ----------------------------------------------------------------------*/
 double al[3],gl[3],ol[3];
+double zero[3];
 int mdmode=0; 
 int n,nb,nglob;
 double r[NEMAX][3],rv[NEMAX][3],ra[NMAX][3];
-double r0[NEMAX][3], v0[NEMAX][3], rg[NMAX][3];
-int atype[NEMAX];
+double r0[NEMAX][3], v0[NEMAX][3];
+double rg[NMAX][3], vg[NMAX][3]; // global coordinates & velocities
+double atype[NEMAX];
 double dbuf[NDBUF],dbufr[NDBUF];
 int sid,nprocs,vid[3],nn[6],myparity[3];
 int nns[6],nnr[6];
 double sv[6][3];
 int lsb[6][NBMAX];
+
 MPI_Status status;
 double cpu,comt;
 int head[NCLMAX],lscl[NEMAX],lc[3];
@@ -102,6 +105,9 @@ double rc[3];
 double kinEnergy,potEnergy,potEnergy0,totEnergy,temperature;
 int stepCount,currCount=0;
 double DeltaTH;    /* Half the time step */
+
+#define NFRAME 500
+double gr0[NFRAME][NEMAX][3], gv0[NFRAME][NEMAX][3], gd0[NFRAME][NEMAX][3];
 
 // variables for multicomponet system
 #define NC 2
@@ -164,9 +170,10 @@ int bmv(double* ri, int ku);
 double sqrt_nr(double y);
 void write_config(int n);
 void gather_coordinates(); 
-void compute_gr(double* hist, int nbin, double grrcut, double grdr);
-double compute_vac();
-double compute_msd();
+void compute_gr(double rg[][3], double* hist, int nbin, double grrcut, double grdr);
+double compute_vac(double rv[][3], double v0[][3]);
+//double compute_msd(double r[][3], double r0[][3]);
+void compute_msd(double *MSD, double gv[][NEMAX][3], int NSAMPLES, int tcurrent);
 
 enum {init,runtime,final};
 void analysis_manager(int phase);

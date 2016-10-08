@@ -5,8 +5,9 @@ systems using the Message Passing Interface (MPI) standard.
 #include "pmd.h"
 
 /*--------------------------------------------------------------------*/
-int main(int argc, char **argv) {
-    /*--------------------------------------------------------------------*/
+int main(int argc, char **argv)
+/*--------------------------------------------------------------------*/
+{
     double cpu1;
 
     MPI_Init(&argc,&argv); /* Initialize the MPI environment */
@@ -21,14 +22,12 @@ int main(int argc, char **argv) {
     compute_accel(); /* Computes initial accelerations */
 
     analysis_manager(init);
-    analysis_manager(runtime);
 
     cpu1 = MPI_Wtime();
     for (stepCount=currCount; stepCount<=currCount+StepLimit; stepCount++) {
         single_step();
         if (stepCount%StepAvg == 0) {
             eval_props();
-
             analysis_manager(runtime);
         }
         // save config every 1000 MD steps
@@ -47,10 +46,11 @@ int main(int argc, char **argv) {
 }
 
 /*--------------------------------------------------------------------*/
-void init_params(int argc, char **argv) {
-    /*----------------------------------------------------------------------
-    Initializes parameters.
-    ----------------------------------------------------------------------*/
+void init_params(int argc, char **argv)
+/*----------------------------------------------------------------------
+Initializes parameters.
+----------------------------------------------------------------------*/
+{
     int a;
     FILE *fp;
 
@@ -125,12 +125,13 @@ void init_params(int argc, char **argv) {
 }
 
 /*--------------------------------------------------------------------*/
-void set_topology() {
-    /*----------------------------------------------------------------------
-    Defines a logical network topology.  Prepares a neighbor-node ID table,
-    nn, & a shift-vector table, sv, for internode message passing.  Also
-    prepares the node parity table, myparity.
-    ----------------------------------------------------------------------*/
+void set_topology()
+/*----------------------------------------------------------------------
+Defines a logical network topology.  Prepares a neighbor-node ID table,
+nn, & a shift-vector table, sv, for internode message passing.  Also
+prepares the node parity table, myparity.
+----------------------------------------------------------------------*/
+{
     /* Integer vectors to specify the six neighbor nodes */
     int iv[6][3] = {
         {-1,0,0}, {1,0,0}, {0,-1,0}, {0,1,0}, {0,0,-1}, {0,0,1}
@@ -169,11 +170,12 @@ void set_topology() {
 }
 
 /*--------------------------------------------------------------------*/
-void init_conf() {
-    /*----------------------------------------------------------------------
-    r are initialized to face-centered cubic (fcc) lattice positions.
-    rv are initialized with a random velocity corresponding to Temperature.
-    ----------------------------------------------------------------------*/
+void init_conf()
+/*----------------------------------------------------------------------
+r are initialized to face-centered cubic (fcc) lattice positions.
+rv are initialized with a random velocity corresponding to Temperature.
+----------------------------------------------------------------------*/
+{
     double c[3],gap[3],e[3],vSum[3],gvSum[3],vMag;
     int j,a,nex,nX,nY,nZ;
     double seed;
@@ -254,6 +256,9 @@ void init_conf() {
         if(sid==0) printf("Start from FCC config.\n");
         /* Set up a face-centered cubic (fcc) lattice */
         for (a=0; a<3; a++) gap[a] = al[a]/InitUcell[a];
+
+        int nTotalLocal = 4*InitUcell[0]*InitUcell[1]*InitUcell[2];
+
         n = 0;
         for (nZ=0; nZ<InitUcell[2]; nZ++) {
             c[2] = nZ*gap[2];
@@ -264,7 +269,9 @@ void init_conf() {
                     for (j=0; j<4; j++) {
                         for (a=0; a<3; a++)
                             r[n][a] = c[a] + gap[a]*origAtom[j][a];
-                        atype[n]=origType[j];
+
+                        atype[n]=origType[j]+(nTotalLocal*sid + n)*1e-9;
+
                         n++;
                     }
                 }
@@ -313,15 +320,14 @@ void init_conf() {
 }
 
 /*--------------------------------------------------------------------*/
-void single_step() {
-    /*----------------------------------------------------------------------
-    r & rv are propagated by DeltaT using the velocity-Verlet scheme.
-    ----------------------------------------------------------------------*/
-    int i,a;
-
+void single_step()
+/*----------------------------------------------------------------------
+r & rv are propagated by DeltaT using the velocity-Verlet scheme.
+----------------------------------------------------------------------*/
+{
     half_kick(); /* First half kick to obtain v(t+Dt/2) */
-    for (i=0; i<n; i++) /* Update atomic coordinates to r(t+Dt) */
-        for (a=0; a<3; a++) r[i][a] = r[i][a] + DeltaT*rv[i][a];
+    for (int i=0; i<n; i++) /* Update atomic coordinates to r(t+Dt) */
+        for (int a=0; a<3; a++) r[i][a] = r[i][a] + DeltaT*rv[i][a];
     atom_move();
     atom_copy();
     compute_accel(); /* Computes new accelerations, a(t+Dt) */
@@ -329,22 +335,23 @@ void single_step() {
 }
 
 /*--------------------------------------------------------------------*/
-void half_kick() {
-    /*----------------------------------------------------------------------
-    Accelerates atomic velocities, rv, by half the time step.
-    ----------------------------------------------------------------------*/
-    int i,a;
-    for (i=0; i<n; i++)
-        for (a=0; a<3; a++) rv[i][a] = rv[i][a]+DeltaTH*ra[i][a];
+void half_kick()
+/*----------------------------------------------------------------------
+Accelerates atomic velocities, rv, by half the time step.
+----------------------------------------------------------------------*/
+{
+    for (int i=0; i<n; i++)
+        for (int a=0; a<3; a++) rv[i][a] = rv[i][a]+DeltaTH*ra[i][a];
 }
 
 /*--------------------------------------------------------------------*/
-void compute_accel() {
-    /*----------------------------------------------------------------------
-    Given atomic coordinates, r[0:n+nb-1][], for the extended (i.e.,
-    resident & copied) system, computes the acceleration, ra[0:n-1][], for
-    the residents.
-    ----------------------------------------------------------------------*/
+void compute_accel()
+/*----------------------------------------------------------------------
+Given atomic coordinates, r[0:n+nb-1][], for the extended (i.e.,
+resident & copied) system, computes the acceleration, ra[0:n-1][], for
+the residents.
+----------------------------------------------------------------------*/
+{
     int i,j,a,lc2[3],lcyz2,lcxyz2,mc[3],c,mc1[3],c1;
     int bintra;
     double dr[3],rr,rrCut,lpe,dr2,dr2i;
@@ -465,10 +472,11 @@ void compute_accel() {
 }
 
 /*--------------------------------------------------------------------*/
-void eval_props() {
-    /*----------------------------------------------------------------------
-    Evaluates physical properties: kinetic, potential & total energies.
-    ----------------------------------------------------------------------*/
+void eval_props()
+/*----------------------------------------------------------------------
+Evaluates physical properties: kinetic, potential & total energies.
+----------------------------------------------------------------------*/
+{
     double vv,lke,msd,vac;
     int i,a;
     double fs;
@@ -497,12 +505,20 @@ void eval_props() {
             for (vv=0.0, a=0; a<3; a++) rv[i][a]=fs*rv[i][a];
     }
 
-    msd=compute_msd();
-    vac=compute_vac();
+    double mm=0.0, gmsd, rr;
+    for(int i=0; i<n; i++) {
+        for(int a=0; a<3; a++) {
+            rr=r[i][a]-r0[i][a];
+            mm += rr*rr;
+        }
+    }
+    MPI_Allreduce(&mm,&gmsd,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+    msd = gmsd/nglob;
 
     /* Print the computed properties */
     if (sid == 0) printf("%9.2f %9.6f %9.6f %9.6f  %9.6lf %9.6lf\n",
                              stepCount*DeltaT,temperature,potEnergy,totEnergy,msd,vac);
+
 }
 
 /*----------------------------------------------------------------------
@@ -534,11 +550,12 @@ inline int bmv(double* ri, int ku) {
 }
 
 /*--------------------------------------------------------------------*/
-void atom_copy() {
-    /*----------------------------------------------------------------------
-    Exchanges boundary-atom coordinates among neighbor nodes:  Makes
-    boundary-atom list, LSB, then sends & receives boundary atoms.
-    ----------------------------------------------------------------------*/
+void atom_copy()
+/*----------------------------------------------------------------------
+Exchanges boundary-atom coordinates among neighbor nodes:  Makes
+boundary-atom list, LSB, then sends & receives boundary atoms.
+----------------------------------------------------------------------*/
+{
     int kd,kdd,i,ku,nsd,nrc,a;
     int inode_s,inode_r;
     int nbnew = 0; /* # of "received" boundary atoms */
@@ -596,7 +613,7 @@ void atom_copy() {
 
             /* Message buffering */
             for (i=1; i<=nsd; i++) {
-                dbuf[4*(i-1)] = (double) atype[lsb[ku][i]];
+                dbuf[4*(i-1)] = atype[lsb[ku][i]];
                 for (a=0; a<3; a++) /* Shift the coordinate origin */
                     dbuf[4*(i-1)+a+1] = r[lsb[ku][i]][a]-sv[ku][a];
             }
@@ -618,7 +635,7 @@ void atom_copy() {
 
             /* Message storing */
             for (i=0; i<nrc; i++) {
-                atype[n+nbnew+i] = (int) dbufr[4*i];
+                atype[n+nbnew+i] = dbufr[4*i];
                 for (a=0; a<3; a++) r[n+nbnew+i][a] = dbufr[4*i+a+1];
             }
 
@@ -637,19 +654,20 @@ void atom_copy() {
 }
 
 /*--------------------------------------------------------------------*/
-void atom_move() {
-    /*----------------------------------------------------------------------
-    Sends moved-out atoms to neighbor nodes and receives moved-in atoms
-    from neighbor nodes.  Called with n, r[0:n-1] & rv[0:n-1], atom_move
-    returns a new n' together with r[0:n'-1] & rv[0:n'-1].
-    ----------------------------------------------------------------------*/
+void atom_move()
+/*----------------------------------------------------------------------
+Sends moved-out atoms to neighbor nodes and receives moved-in atoms
+from neighbor nodes.  Called with n, r[0:n-1] & rv[0:n-1], atom_move
+returns a new n' together with r[0:n'-1] & rv[0:n'-1].
+----------------------------------------------------------------------*/
 
-    /* Local variables------------------------------------------------------
+/* Local variables------------------------------------------------------
 
-    mvque[6][NBMAX]: mvque[ku][0] is the # of to-be-moved atoms to neighbor
-      ku; MVQUE[ku][k>0] is the atom ID, used in r, of the k-th atom to be
-      moved.
-    ----------------------------------------------------------------------*/
+mvque[6][NBMAX]: mvque[ku][0] is the # of to-be-moved atoms to neighbor
+  ku; MVQUE[ku][k>0] is the atom ID, used in r, of the k-th atom to be
+  moved.
+----------------------------------------------------------------------*/
+{
     int mvque[6][NBMAX];
     int newim = 0; /* # of new immigrants */
     int ku,kd,i,kdd,kul,kuh,ipt,a,nsd,nrc;
@@ -712,7 +730,7 @@ void atom_move() {
 
             /* Message buffering */
             for (i=1; i<=nsd; i++) {
-                dbuf[13*(i-1)] = (double)atype[mvque[ku][i]];
+                dbuf[13*(i-1)] = atype[mvque[ku][i]];
                 for (a=0; a<3; a++) {
                     /* Shift the coordinate origin */
                     dbuf[13*(i-1)+1+a] = r [mvque[ku][i]][a]-sv[ku][a];
@@ -739,7 +757,7 @@ void atom_move() {
 
             /* Message storing */
             for (i=0; i<nrc; i++) {
-                atype [n+newim+i] = (int) dbufr[13*i];
+                atype [n+newim+i] = dbufr[13*i];
                 for (a=0; a<3; a++) {
                     r [n+newim+i][a] = dbufr[13*i+1+a];
                     rv[n+newim+i][a] = dbufr[13*i+4+a];
@@ -853,9 +871,10 @@ void make_tables() {
 }
 
 /*---------------------------------------------------------------------*/
-void gather_coordinates() {
-    /*---------------------------------------------------------------------
-    ----------------------------------------------------------------------*/
+void gather_coordinates(const double in[][3], double out[][3], const double ref[3])
+/*---------------------------------------------------------------------
+----------------------------------------------------------------------*/
+{
     int i,a,nex;
     double *sbuf,*rbuf;
 
@@ -864,37 +883,43 @@ void gather_coordinates() {
     //printf("sid=%d n=%d nex=%d\n",sid,n,nex);
 
     // allocate and clean up arrays
-    sbuf = (double *)malloc(sizeof(double)*NMAX*3);
-    for(i=0; i<NMAX; i++)
+    sbuf = (double *)malloc(sizeof(double)*nglob*3);
+    for(i=0; i<nglob; i++)
         for(a=0; a<3; a++)
             sbuf[i*3+a]=0.0;
 
     // initialize dbuf with global coord.
     for(i=0; i<n; i++)
-        for(a=0; a<3; a++)
-            sbuf[(i+nex)*3+a]=r[i][a]+ol[a];
+    {
+        int ity = (int) atype[i];
+        int id = (int)((atype[i]-ity)*1e9 + 0.1);
 
-    rbuf = (double *)malloc(sizeof(double)*NMAX*3);
-    MPI_Allreduce(sbuf,rbuf,NMAX*3,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
-
-    // rbuf has all atom global coordinates by now.
-    for(i=0; i<nglob; i++)
         for(a=0; a<3; a++)
-            rg[i][a]=rbuf[i*3+a];
+            sbuf[id*3+a]=in[i][a]+ref[a];
+    }
+    rbuf = (double *)malloc(sizeof(double)*nglob*3);
+    MPI_Allreduce(sbuf,rbuf,nglob*3,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+
+    // rbuf has global coordinates.
+    for(int i=0; i<nglob; i++)
+        for(int a=0; a<3; a++)
+            out[i][a]=rbuf[i*3+a];
 
     free(sbuf);
     free(rbuf);
 }
 /*---------------------------------------------------------------------*/
-void compute_gr(double* hist, int nbin, double grrcut, double grdr) {
-    /*---------------------------------------------------------------------
-    this function computes g(r) based on current atom coordinates
-    and append into hist array, helps increasing the number of sampling.
-    ----------------------------------------------------------------------*/
+void compute_gr(double rg[][3], double* hist, int nbin, double grrcut, double grdr)
+/*---------------------------------------------------------------------
+this function computes g(r) based on current atom coordinates
+and append into hist array, helps increasing the number of sampling.
+----------------------------------------------------------------------*/
+{
     int i,j,a;
     int idx;
     double *rbuf, *sbuf;
     double rdif,rr;
+
 
     sbuf = (double *)malloc(sizeof(double)*nbin);
     for(i=0; i<nbin; i++) sbuf[i]=0.0;
@@ -930,67 +955,73 @@ void compute_gr(double* hist, int nbin, double grrcut, double grdr) {
     free(sbuf);
     free(rbuf);
 }
-
 /*---------------------------------------------------------------------*/
-double compute_vac()
+double compute_vac(double rv[][3], double v0[][3])
 /*---------------------------------------------------------------------
  * return velocity auto-correlation
 ----------------------------------------------------------------------*/
 {
-    int i, a;
-    double  vv,v0nrm,vacl,vac=0.0;
+    double vac=0.0;
 
-    vacl=0.0;
-    for (i=0; i<n; i++) {
-        vv=0.0;
-        v0nrm=0.0;
-        for (a=0; a<3; a++) {
-            v0nrm += v0[i][a]*v0[i][a];
-            vv += v0[i][a]*rv[i][a];
-        }
-        //vacl += vv/v0nrm;
-        vacl += vv;
-    }
+    for (int i=0; i<nglob; i++)
+        for (int a=0; a<3; a++)
+            vac += v0[i][a]*rv[i][a];
 
-    MPI_Allreduce(&vacl,&vac,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
     vac /= nglob;
 
     return vac;
 }
 
 /*---------------------------------------------------------------------*/
-double compute_msd()
+void compute_msd(double *MSD, double gv[][NEMAX][3], int NSAMPLES, int tcurrent)
 /*---------------------------------------------------------------------
  * return mean square displacement
 ----------------------------------------------------------------------*/
 {
-    int i, a;
-    double rr,rr1,msd=0.0;
+    double dr[NMAX][3];
 
-    rr=0.0;
-    for (i=0; i<n; i++) {
-        for (a=0; a<3; a++) {
-            rr1 = r[i][a]-r0[i][a];
-            rr += rr1*rr1;
+    // reset displacement vector
+    for(int i=0; i<nglob; i++)
+        for(int a=0; a<3; a++) dr[i][a]=0.0;
+
+    // compute displacement from the record of velocity.
+    for(int t = 1; t < NSAMPLES; t++)
+    {
+        double msd=0.0;
+
+        for (int i=0; i<nglob; i++)
+        {
+            for (int a=0; a<3; a++)
+            {
+                dr[i][a] += gv[t-1+tcurrent][i][a];
+                msd += dr[i][a]*dr[i][a];
+            }
         }
+
+        MSD[t]+=msd/nglob;
     }
 
-    MPI_Allreduce(&rr,&msd,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
-    msd /= nglob;
-
-    return msd;
+    return;
 }
 
 /*---------------------------------------------------------------------*/
-void analysis_manager(int phase) {
-    /*---------------------------------------------------------------------*/
-    /*---------------------------------------------------------------------*/
+// Initialize the initial values for stats
+void save_initial_points_for_stat(double const in[][3], double out[][3])
+/*---------------------------------------------------------------------*/
+{
+    for(int i=0; i<nglob; i++)
+        for(int a=0; a<3; a++) out[i][a] = in[i][a];
+}
 
+/*---------------------------------------------------------------------*/
+void analysis_manager(int phase)
+/*---------------------------------------------------------------------*/
+{
     static double pi=3.14159265359;
 
     static int *COUNT;
     static double *MSD, *VAC;
-    static int idx = 0, NSAMPLES = 50;
+    static int idx = 0, nsnap=0, NSAMPLES = 100;
     int ctime;
     double wg,ft;
 
@@ -1016,10 +1047,10 @@ void analysis_manager(int phase) {
             VAC[i]=0.0;
         }
 
-	// get the shortest edge, make it half. 
-	grrcut = gl[0] > gl[1] ? gl[1] : gl[0];
-	grrcut = grrcut > gl[2] ? gl[2] : grrcut;
-	grrcut = 0.5*grrcut;
+        // get the shortest edge, make it half.
+        grrcut = gl[0] > gl[1] ? gl[1] : gl[0];
+        grrcut = grrcut > gl[2] ? gl[2] : grrcut;
+        grrcut = 0.5*grrcut;
 
         /* get number of bins and reset gr*/
         nbin=grrcut/grdr;
@@ -1027,53 +1058,53 @@ void analysis_manager(int phase) {
         for(int i=0; i<nbin; i++) GR[i]=0.0;
         grcount = 0;
 
-        /* Initialize the initial coordinate */
-        for (j=0; j<n; j++)
-            for(a=0; a<3; a++)
-            {
-                r0[j][a] = r[j][a];
-                v0[j][a] = rv[j][a];
-            }
-
         break;
 
     case (runtime):
 
-        if(idx==NSAMPLES)
-        {
-            idx=0;
+        gather_coordinates(r, rg, ol);
+        gather_coordinates(rv, vg, zero);
 
-            /* Initialize the initial coordinate */
-            for (j=0; j<n; j++)
-            {
-                for(a=0; a<3; a++)
-                {
-                    r0[j][a] = r[j][a];
-                    v0[j][a] = rv[j][a];
-                }
-            }
+        //printf("nsnap = %d \n", nsnap);
+        save_initial_points_for_stat(vg,gv0[nsnap]);
+        save_initial_points_for_stat(rg,gr0[nsnap]);
 
-            // compute_gr() takes into account all atom coordinates so that
-            // g(r) is not limited by the cutoff length or local MDbox size;
-            // needs to call gather_coordinate() prior to compute_gr().
-            grcount++;
-            gather_coordinates();
-            compute_gr(GR, nbin, grrcut, grdr);
+        double rd[NMAX][3], rdg[NMAX][3];
 
-        }
+        for(int i=0; i<n; i++)
+            for(int a=0; a<3; a++)
+                rd[i][a]=r[i][a]-r0[i][a];
 
-        MSD[idx] += compute_msd();
-        VAC[idx] += compute_vac();
-        COUNT[idx]++;
+        gather_coordinates(rd, rdg, zero);
+        save_initial_points_for_stat(rdg,gd0[nsnap]);
 
-        idx++;
+        for(int i=0; i<n; i++)
+            for(int a=0; a<3; a++)
+                r0[i][a]=r[i][a];
+
+        nsnap++;
 
         break;
 
     case (final):
 
+        // all MPI ranks need to participate because of MPI_Allreduce inside.
+        for(int t=0; t<NSAMPLES; t++)
+            compute_gr(gr0[t], GR, nbin, grrcut, grdr);
+
         if(sid==0)
         {
+            //-------------------------------------------------
+            for(int i=0; i<StepLimit/StepAvg-NSAMPLES; i++)
+            {
+                compute_msd(MSD,gd0,NSAMPLES,i);
+
+                for(int t=0; t<NSAMPLES; t++)
+                {
+                    VAC[t] += compute_vac(gv0[i+t],gv0[i]);
+                    COUNT[t]++;
+                }
+            }
             //-------------------------------------------------
             fp = fopen("msd.d","w");
             for(int i=0; i<NSAMPLES; i++)
@@ -1081,7 +1112,7 @@ void analysis_manager(int phase) {
                 ctime = i*StepAvg;
                 if(COUNT[i]>0)
                     MSD[i]/=COUNT[i];
-		else
+                else
                     MSD[i]=0.0;
 
                 fprintf(fp,"%d,%lf,%d\n", ctime, MSD[i], COUNT[i]);
@@ -1091,17 +1122,17 @@ void analysis_manager(int phase) {
 
             //-------------------------------------------------
             fp = fopen("vac.d","w");
-            for(int i=0; i<NSAMPLES; i++)
+            for(int t=0; t<NSAMPLES; t++)
             {
-                ctime = i*StepAvg;
-                if(COUNT[i]>0)
-                    VAC[i]/=COUNT[i];
-		else
-                    VAC[i]=0.0;
-
-                fprintf(fp,"%d,%lf,%d\n", ctime, VAC[i], COUNT[i]);
+                ctime = t*StepAvg;
+                if(COUNT[t]>0)
+                    VAC[t]/=COUNT[t];
+                else
+                    VAC[t]=0.0;
+                fprintf(fp,"%d,%lf,%d\n", ctime, VAC[t], COUNT[t]);
             }
             fclose(fp);
+
 
             fp = fopen("ft.d","w");
             for(int a=1; a<100; a++)
@@ -1119,16 +1150,14 @@ void analysis_manager(int phase) {
             free(VAC);
 
             //-------------------------------------------------
-
             cr=0.0;
-
             fp=fopen("gr.d","w");
             for(int i=1; i<nbin; i++)
             {
                 rr = i*grdr;
                 denom = 4.0*pi*(rr*rr*grdr*Density);
-                gr = GR[i]/grcount/nglob/denom;
-                cr += GR[i]/grcount/nglob;
+                gr = GR[i]/NSAMPLES/nglob/denom;
+                cr += GR[i]/NSAMPLES/nglob;
                 fprintf(fp,"%lf,%lf,%lf,%d\n", rr, gr, cr, grcount);
 
                 GR[i] = gr; // keep the value for the sq calculation below
@@ -1152,7 +1181,9 @@ void analysis_manager(int phase) {
             }
             fclose(fp);
 
-	    free(GR);
+            free(GR);
+
+
         }
 
         break;
@@ -1163,12 +1194,13 @@ void analysis_manager(int phase) {
 }
 
 /*---------------------------------------------------------------------*/
-void write_config(int nstep) {
-    /*---------------------------------------------------------------------
-     * This funcition serializes writing file process in order to
-     * save all data in one file. A write token will be passed from
-     * MPIrank==0 to nprocs-1. whoever holds the token can access file.
-    ----------------------------------------------------------------------*/
+void write_config(int nstep)
+/*---------------------------------------------------------------------
+* This funcition serializes writing file process in order to
+* save all data in one file. A write token will be passed from
+* MPIrank==0 to nprocs-1. whoever holds the token can access file.
+----------------------------------------------------------------------*/
+{
     FILE *fp;
     char fname[19];
     uint32_t i,a;
@@ -1222,7 +1254,7 @@ void write_config(int nstep) {
     // write atom type, position, velocity & close file
     for(a=0; a<n; a++) {
         fprintf(fp,"%d %lf %lf %lf %lf %lf %lf\n",
-                atype[a], r[a][0]+rs[0],r[a][1]+rs[1],r[a][2]+rs[2],
+                (int)atype[a], r[a][0]+rs[0],r[a][1]+rs[1],r[a][2]+rs[2],
                 rv[a][0],rv[a][1],rv[a][2]);
     }
     fclose(fp);
