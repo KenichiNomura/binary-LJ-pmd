@@ -177,12 +177,12 @@ rv are initialized with a random velocity corresponding to Temperature.
 ----------------------------------------------------------------------*/
 {
     double c[3],gap[3],e[3],vSum[3],gvSum[3],vMag;
-    int j,a,nex,nX,nY,nZ;
+    int j,a,nex,nX,nY,nZ,itype;
     double seed;
     FILE *fp = NULL;
     long int *nary;
-    int *tary;
-    double *rary, *vary;
+    //int *tary;
+    double *tary, *rary, *vary;
     /* FCC atoms in the original unit cell */
     double origAtom[4][3] = {{0.0, 0.0, 0.0}, {0.0, 0.5, 0.5},
         {0.5, 0.0, 0.5}, {0.5, 0.5, 0.0}
@@ -203,7 +203,7 @@ rv are initialized with a random velocity corresponding to Temperature.
 
         // allocate buffer to receive the broadcast
         nary=malloc(sizeof(long int)*nprocs);
-        tary=malloc(sizeof(int)*nglob);
+        tary=malloc(sizeof(double)*nglob);
         rary=malloc(sizeof(double)*3*nglob);
         vary=malloc(sizeof(double)*3*nglob);
 
@@ -211,14 +211,14 @@ rv are initialized with a random velocity corresponding to Temperature.
         if(sid==0) {
             for(a=0; a<nprocs; a++) fscanf(fp,"%ld",&nary[a]);
             for(a=0; a<nglob; a++)
-                fscanf(fp,"%d %lf %lf %lf %lf %lf %lf\n",
-                       &tary[a], &rary[3*a],&rary[3*a+1],&rary[3*a+2],
-                       &vary[3*a],&vary[3*a+1],&vary[3*a+2]);
+                fscanf(fp,"%d %lf %lf %lf %lf %lf %lf %lf\n",
+                       &itype, &rary[3*a],&rary[3*a+1],&rary[3*a+2],
+                       &vary[3*a],&vary[3*a+1],&vary[3*a+2],&tary[a]);
         }
 
         // then, broadcast data from MPIrank==0
         MPI_Bcast(nary, nprocs, MPI_LONG, 0, MPI_COMM_WORLD);
-        MPI_Bcast(tary, nglob, MPI_INT, 0, MPI_COMM_WORLD);
+        MPI_Bcast(tary, nglob, MPI_DOUBLE, 0, MPI_COMM_WORLD);
         MPI_Bcast(rary, 3*nglob, MPI_DOUBLE, 0, MPI_COMM_WORLD);
         MPI_Bcast(vary, 3*nglob, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
@@ -477,7 +477,7 @@ void eval_props()
 Evaluates physical properties: kinetic, potential & total energies.
 ----------------------------------------------------------------------*/
 {
-    double vv,lke,msd,vac;
+    double vv,lke;
     int i,a;
     double fs;
 
@@ -505,19 +505,10 @@ Evaluates physical properties: kinetic, potential & total energies.
             for (vv=0.0, a=0; a<3; a++) rv[i][a]=fs*rv[i][a];
     }
 
-    double mm=0.0, gmsd, rr;
-    for(int i=0; i<n; i++) {
-        for(int a=0; a<3; a++) {
-            rr=r[i][a]-r0[i][a];
-            mm += rr*rr;
-        }
-    }
-    MPI_Allreduce(&mm,&gmsd,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
-    msd = gmsd/nglob;
 
     /* Print the computed properties */
-    if (sid == 0) printf("%9.2f %9.6f %9.6f %9.6f  %9.6lf %9.6lf\n",
-                             stepCount*DeltaT,temperature,potEnergy,totEnergy,msd,vac);
+    if (sid == 0) printf("%9.2f %9.6f %9.6f %9.6f %9.6f\n",
+                             stepCount*DeltaT,temperature,potEnergy,kinEnergy,totEnergy);
 
 }
 
@@ -798,11 +789,12 @@ mvque[6][NBMAX]: mvque[ku][0] is the # of to-be-moved atoms to neighbor
 }
 
 /*---------------------------------------------------------------------*/
-void make_tables() {
-    /*----------------------------------------------------------------------
-     * make potential & force tables. the tables have values upto RCUT/NTMAX,
-     * the last point in the two tables to make sure r=RCUT being treated propery.
-     * ----------------------------------------------------------------------*/
+void make_tables()
+/*----------------------------------------------------------------------
+ * make potential & force tables. the tables have values upto RCUT/NTMAX,
+ * the last point in the two tables to make sure r=RCUT being treated propery.
+ * ----------------------------------------------------------------------*/
+{
     int i,ia,ib;
     double ri, ri2, ri6, ri12;
     double currentr, currentr2, voffset, foffset;
@@ -871,6 +863,45 @@ void make_tables() {
 }
 
 /*---------------------------------------------------------------------*/
+void gather_coordinates1d(const double in[], double out[])
+/*---------------------------------------------------------------------
+----------------------------------------------------------------------*/
+{
+    int i,a,nex;
+    double *sbuf,*rbuf;
+
+    // allocate and clean up arrays
+    sbuf = (double *)malloc(sizeof(double)*nglob);
+    for(i=0; i<nglob; i++)
+        sbuf[i]=0.0;
+
+    // initialize dbuf with global coord.
+    for(i=0; i<n; i++)
+    {
+        int ity = (int) atype[i];
+        int id = (int)((atype[i]-ity)*1e9 + 0.5);
+
+        sbuf[id]=in[i];
+    }
+    rbuf = (double *)malloc(sizeof(double)*nglob);
+    MPI_Allreduce(sbuf,rbuf,nglob,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+
+    // rbuf has global coordinates.
+    for(int i=0; i<nglob; i++)
+        out[i]=rbuf[i];
+
+    for(int i=0; i<nglob; i++)
+    {
+        int ity = (int) atype[i];
+        int id = (int)((atype[i]-ity)*1e9 + 0.5);
+        //printf("i = %d id = %d atype = %20.16lf\n", i, id, atype[i]);
+    }
+
+    free(sbuf);
+    free(rbuf);
+}
+
+/*---------------------------------------------------------------------*/
 void gather_coordinates(const double in[][3], double out[][3], const double ref[3])
 /*---------------------------------------------------------------------
 ----------------------------------------------------------------------*/
@@ -892,7 +923,7 @@ void gather_coordinates(const double in[][3], double out[][3], const double ref[
     for(i=0; i<n; i++)
     {
         int ity = (int) atype[i];
-        int id = (int)((atype[i]-ity)*1e9 + 0.1);
+        int id = (int)((atype[i]-ity)*1e9 + 0.5);
 
         for(a=0; a<3; a++)
             sbuf[id*3+a]=in[i][a]+ref[a];
@@ -904,6 +935,13 @@ void gather_coordinates(const double in[][3], double out[][3], const double ref[
     for(int i=0; i<nglob; i++)
         for(int a=0; a<3; a++)
             out[i][a]=rbuf[i*3+a];
+
+    for(int i=0; i<nglob; i++)
+    {
+        int ity = (int) atype[i];
+        int id = (int)((atype[i]-ity)*1e9 + 0.5);
+        //printf("i = %d id = %d atype = %20.16lf\n", i, id, atype[i]);
+    }
 
     free(sbuf);
     free(rbuf);
@@ -956,7 +994,7 @@ and append into hist array, helps increasing the number of sampling.
     free(rbuf);
 }
 /*---------------------------------------------------------------------*/
-double compute_vac(double rv[][3], double v0[][3])
+double compute_vac(double const rv[][3], double const v0[][3])
 /*---------------------------------------------------------------------
  * return velocity auto-correlation
 ----------------------------------------------------------------------*/
@@ -965,7 +1003,7 @@ double compute_vac(double rv[][3], double v0[][3])
 
     for (int i=0; i<nglob; i++)
         for (int a=0; a<3; a++)
-            vac += v0[i][a]*rv[i][a];
+            vac += rv[i][a]*v0[i][a];
 
     vac /= nglob;
 
@@ -973,7 +1011,7 @@ double compute_vac(double rv[][3], double v0[][3])
 }
 
 /*---------------------------------------------------------------------*/
-void compute_msd(double *MSD, double gv[][NEMAX][3], int NSAMPLES, int tcurrent)
+void compute_msd(double *MSD, double gd[][NEMAX][3], int NSAMPLES, int tcurrent)
 /*---------------------------------------------------------------------
  * return mean square displacement
 ----------------------------------------------------------------------*/
@@ -993,7 +1031,7 @@ void compute_msd(double *MSD, double gv[][NEMAX][3], int NSAMPLES, int tcurrent)
         {
             for (int a=0; a<3; a++)
             {
-                dr[i][a] += gv[t-1+tcurrent][i][a];
+                dr[i][a] += gd[t-1+tcurrent][i][a];
                 msd += dr[i][a]*dr[i][a];
             }
         }
@@ -1064,9 +1102,13 @@ void analysis_manager(int phase)
 
         gather_coordinates(r, rg, ol);
         gather_coordinates(rv, vg, zero);
+        gather_coordinates1d(atype, ag);
 
-        //printf("nsnap = %d \n", nsnap);
-        save_initial_points_for_stat(vg,gv0[nsnap]);
+        for(i=0; i<nglob; i++)
+            //if(atype[i]!=ag[i]) printf("i = %d atype %20.15lf ag %20.15lf\n",i, atype[i], ag[i]);
+
+            //printf("nsnap = %d \n", nsnap);
+            save_initial_points_for_stat(vg,gv0[nsnap]);
         save_initial_points_for_stat(rg,gr0[nsnap]);
 
         double rd[NMAX][3], rdg[NMAX][3];
@@ -1253,9 +1295,9 @@ void write_config(int nstep)
 
     // write atom type, position, velocity & close file
     for(a=0; a<n; a++) {
-        fprintf(fp,"%d %lf %lf %lf %lf %lf %lf\n",
+        fprintf(fp,"%d %lf %lf %lf %lf %lf %lf %20.16lf\n",
                 (int)atype[a], r[a][0]+rs[0],r[a][1]+rs[1],r[a][2]+rs[2],
-                rv[a][0],rv[a][1],rv[a][2]);
+                rv[a][0],rv[a][1],rv[a][2],atype[a]);
     }
     fclose(fp);
 

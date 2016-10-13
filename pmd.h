@@ -92,6 +92,7 @@ double r[NEMAX][3],rv[NEMAX][3],ra[NMAX][3];
 double r0[NEMAX][3], v0[NEMAX][3];
 double rg[NMAX][3], vg[NMAX][3]; // global coordinates & velocities
 double atype[NEMAX];
+double ag[NMAX];
 double dbuf[NDBUF],dbufr[NDBUF];
 int sid,nprocs,vid[3],nn[6],myparity[3];
 int nns[6],nnr[6];
@@ -171,7 +172,7 @@ double sqrt_nr(double y);
 void write_config(int n);
 void gather_coordinates(); 
 void compute_gr(double rg[][3], double* hist, int nbin, double grrcut, double grdr);
-double compute_vac(double rv[][3], double v0[][3]);
+double compute_vac(double const rv[][3], double const v0[][3]);
 //double compute_msd(double r[][3], double r0[][3]);
 void compute_msd(double *MSD, double gv[][NEMAX][3], int NSAMPLES, int tcurrent);
 
